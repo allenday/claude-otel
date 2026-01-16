@@ -19,6 +19,7 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.trace import Status, StatusCode
 
 from claude_otel.config import get_config, OTelConfig
+from claude_otel.pii import sanitize_attribute, safe_attributes
 
 
 def get_sampler(config: OTelConfig) -> Sampler:
@@ -98,11 +99,11 @@ def run_claude(args: list[str], tracer: trace.Tracer) -> int:
         span.set_attribute("claude.args_count", len(args))
 
         # Capture a preview of the prompt if provided via stdin or args
-        # (lightweight; don't capture full content for PII reasons)
+        # Apply PII safeguards: sanitize and truncate
         if args:
-            # Truncate to avoid large payloads
-            preview = " ".join(args)[:100]
-            span.set_attribute("claude.args_preview", preview)
+            preview = " ".join(args)
+            sanitized_preview, _ = sanitize_attribute(preview, max_length=100)
+            span.set_attribute("claude.args_preview", sanitized_preview)
 
         try:
             # Shell out to Claude CLI, passing through all arguments
@@ -132,7 +133,8 @@ def run_claude(args: list[str], tracer: trace.Tracer) -> int:
         except Exception as e:
             span.set_status(Status(StatusCode.ERROR, str(e)))
             span.set_attribute("error", True)
-            span.set_attribute("error.message", str(e)[:500])  # Truncate for safety
+            error_msg, _ = sanitize_attribute(str(e), max_length=500)
+            span.set_attribute("error.message", error_msg)
             print(f"[claude-otel] Error: {e}", file=sys.stderr)
             return 1
 
