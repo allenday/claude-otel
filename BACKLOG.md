@@ -33,4 +33,4 @@ Package configuration lives in `pyproject.toml`.
 - [x] Add per-tool metrics labels (tool.name) for Prometheus counters.
 - [alpha] Add configurable redaction rules (regex/allowlist) for inputs/outputs.
 - [bravo] Add token count capture if the CLI/SDK exposes usage.
-- [ ] Add resilience features (bounded queues/drop policy, retries).
+- [charlie] Add resilience features (bounded queues/drop policy, retries).
