@@ -22,7 +22,7 @@ Package configuration lives in `pyproject.toml`.
 - [x] Add unit tests for hook logic (span creation, duration calc, error paths) and a local integration test that sends a dummy span/log to bastion.
 
 ## Milestone 2: Deployment & Validation
-- [alpha] Add a small docs section in the repo (usage, env vars, troubleshooting).
+- [x] Add a small docs section in the repo (usage, env vars, troubleshooting).
 - [charlie] Run a manual smoke session; verify `service_name` appears in Loki and metrics counters increment on bastion.
 - [ ] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested).
 
