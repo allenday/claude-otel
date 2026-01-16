@@ -32,5 +32,8 @@ Package configuration lives in `pyproject.toml`.
 ## Milestone 3: Enhancements (Optional)
 - [x] Add per-tool metrics labels (tool.name) for Prometheus counters.
 - [x] Add configurable redaction rules (regex/allowlist) for inputs/outputs.
-- [bravo] Add token count capture if the CLI/SDK exposes usage.
+- [x] Add token count capture if the CLI/SDK exposes usage.
+  - Extracts token usage (input_tokens, output_tokens, cache_read, cache_creation) from Claude transcript
+  - Adds tokens.* span attributes: tokens.input, tokens.output, tokens.cache_read, tokens.cache_creation, tokens.total
+  - Tests added in `tests/test_hooks.py`
 - [charlie] Add resilience features (bounded queues/drop policy, retries).

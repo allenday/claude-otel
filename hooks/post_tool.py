@@ -3,6 +3,8 @@
 
 Retrieves start time and input from PreToolUse context file, combines with
 tool response data, and emits a complete span with all attributes.
+
+Token usage is extracted from the Claude transcript file (if available).
 """
 
 import json
@@ -10,7 +12,7 @@ import os
 import sys
 import time
 import tempfile
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 # Import OTEL after ensuring package is available
 try:
@@ -129,6 +131,86 @@ def load_pre_context(tool_use_id: str) -> Optional[dict]:
         return None
 
 
+def extract_token_usage(transcript_path: str, tool_use_id: str) -> Optional[Dict[str, int]]:
+    """Extract token usage from the Claude transcript for the tool invocation.
+
+    The transcript is a JSONL file where each line is a message. We look for
+    the assistant message that contains the tool_use with matching ID, then
+    extract the usage metrics from that entry.
+
+    Args:
+        transcript_path: Path to the session transcript JSONL file.
+        tool_use_id: The tool_use_id to find usage for.
+
+    Returns:
+        Dict with token counts if found, None otherwise.
+        Keys: input_tokens, output_tokens, cache_read_input_tokens,
+              cache_creation_input_tokens
+    """
+    if not transcript_path or not os.path.exists(transcript_path):
+        return None
+
+    try:
+        # Read the last N lines efficiently (tool use should be recent)
+        # We use a tail-like approach to avoid reading the entire file
+        with open(transcript_path, "rb") as f:
+            # Seek to end and read backwards to find last ~50KB
+            f.seek(0, 2)  # End of file
+            file_size = f.tell()
+            read_size = min(file_size, 50 * 1024)  # Last 50KB
+            f.seek(max(0, file_size - read_size))
+            data = f.read().decode("utf-8", errors="replace")
+
+        # Split into lines and parse from the end
+        lines = data.strip().split("\n")
+
+        for line in reversed(lines):
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+
+                # Check if this is an assistant message with our tool_use_id
+                message = entry.get("message", {})
+                if message.get("role") != "assistant":
+                    continue
+
+                # Check content for matching tool_use
+                content = message.get("content", [])
+                if not isinstance(content, list):
+                    continue
+
+                for item in content:
+                    if (
+                        isinstance(item, dict)
+                        and item.get("type") == "tool_use"
+                        and item.get("id") == tool_use_id
+                    ):
+                        # Found the message, extract usage
+                        usage = message.get("usage", {})
+                        if usage:
+                            return {
+                                "input_tokens": usage.get("input_tokens", 0),
+                                "output_tokens": usage.get("output_tokens", 0),
+                                "cache_read_input_tokens": usage.get(
+                                    "cache_read_input_tokens", 0
+                                ),
+                                "cache_creation_input_tokens": usage.get(
+                                    "cache_creation_input_tokens", 0
+                                ),
+                            }
+                        return None
+
+            except json.JSONDecodeError:
+                continue
+
+    except Exception as e:
+        if get_env("CLAUDE_OTEL_DEBUG", "").lower() in ("1", "true"):
+            print(f"[claude-otel] Token extraction error: {e}", file=sys.stderr)
+
+    return None
+
+
 def main():
     try:
         # Parse input from Claude
@@ -151,6 +233,10 @@ def main():
         tool_input = input_data.get("tool_input", pre_context.get("tool_input", {}) if pre_context else {})
         tool_response = input_data.get("tool_response", "")
         session_id = input_data.get("session_id", pre_context.get("session_id", "") if pre_context else "")
+        transcript_path = input_data.get("transcript_path", "")
+
+        # Extract token usage from transcript (if available)
+        token_usage = extract_token_usage(transcript_path, tool_use_id)
 
         # Calculate timing
         end_time_ns = time.time_ns()
@@ -212,6 +298,26 @@ def main():
             span.set_attribute("error", is_error)
             if error_message:
                 span.set_attribute("error.message", error_message[:500])
+
+            # Token usage (if available from transcript)
+            if token_usage:
+                span.set_attribute("tokens.input", token_usage.get("input_tokens", 0))
+                span.set_attribute("tokens.output", token_usage.get("output_tokens", 0))
+                span.set_attribute(
+                    "tokens.cache_read", token_usage.get("cache_read_input_tokens", 0)
+                )
+                span.set_attribute(
+                    "tokens.cache_creation",
+                    token_usage.get("cache_creation_input_tokens", 0),
+                )
+                # Total tokens for easy querying
+                total_tokens = (
+                    token_usage.get("input_tokens", 0)
+                    + token_usage.get("output_tokens", 0)
+                    + token_usage.get("cache_read_input_tokens", 0)
+                    + token_usage.get("cache_creation_input_tokens", 0)
+                )
+                span.set_attribute("tokens.total", total_tokens)
 
             # Set span status
             if is_error:

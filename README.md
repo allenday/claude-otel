@@ -240,6 +240,20 @@ When `OTEL_METRICS_EXPORTER=otlp` is set, the following metrics are exported:
 | `claude.tool_calls_errors_total` | Counter | `tool.name` | Tool call errors |
 | `claude.tool_call_duration_ms` | Histogram | `tool.name` | Tool call duration |
 
+## Token Usage Tracking
+
+Tool spans include token usage attributes when available from the Claude transcript:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `tokens.input` | int | Input tokens for the API call |
+| `tokens.output` | int | Output tokens generated |
+| `tokens.cache_read` | int | Tokens read from cache |
+| `tokens.cache_creation` | int | Tokens used for cache creation |
+| `tokens.total` | int | Sum of all token counts |
+
+Token usage is extracted from the Claude CLI transcript file which contains detailed usage metrics per API call.
+
 ## Architecture
 
 ```
