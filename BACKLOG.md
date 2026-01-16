@@ -19,7 +19,7 @@ Package configuration lives in `pyproject.toml`.
 - [x] Export basic metrics (counters: tool_calls total/per tool; gauge: in-flight tools if applicable).
 - [x] Config via env (OTEL_*), with a single coherent protocol/endpoint; default to gRPC 4317.
 - [x] Apply lightweight PII safeguards: truncate tool inputs/outputs, avoid storing raw large payloads.
-- [charlie] Add unit tests for hook logic (span creation, duration calc, error paths) and a local integration test that sends a dummy span/log to bastion.
+- [x] Add unit tests for hook logic (span creation, duration calc, error paths) and a local integration test that sends a dummy span/log to bastion.
 
 ## Milestone 2: Deployment & Validation
 - [alpha] Add a small docs section in the repo (usage, env vars, troubleshooting).
