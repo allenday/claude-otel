@@ -14,7 +14,7 @@ Package configuration lives in `pyproject.toml`.
 
 ## Milestone 1: MVP OTEL Wrapper
 - [x] Implement a lightweight wrapper script (e.g., `bin/claude-otel`) that shells out to Claude CLI/SDK with OTEL hooks.
-- [ ] Emit session span and child spans for tool uses (attributes: tool.name, duration_ms, exit_code/error flag, stdout_bytes, stderr_bytes, truncated flags, input summary, prompt/session IDs).
+- [bravo] Emit session span and child spans for tool uses (attributes: tool.name, duration_ms, exit_code/error flag, stdout_bytes, stderr_bytes, truncated flags, input summary, prompt/session IDs).
 - [x] Export traces and logs via OTLP to bastion (default gRPC 4317; HTTP optional).
 - [x] Export basic metrics (counters: tool_calls total/per tool; gauge: in-flight tools if applicable).
 - [x] Config via env (OTEL_*), with a single coherent protocol/endpoint; default to gRPC 4317.
