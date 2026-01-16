@@ -28,6 +28,6 @@ Package configuration lives in `pyproject.toml`.
 
 ## Milestone 3: Enhancements (Optional)
 - [x] Add per-tool metrics labels (tool.name) for Prometheus counters.
-- [ ] Add configurable redaction rules (regex/allowlist) for inputs/outputs.
+- [alpha] Add configurable redaction rules (regex/allowlist) for inputs/outputs.
 - [ ] Add token count capture if the CLI/SDK exposes usage.
 - [ ] Add resilience features (bounded queues/drop policy, retries).
