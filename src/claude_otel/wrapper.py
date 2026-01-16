@@ -1,6 +1,5 @@
 """Lightweight wrapper that shells out to Claude CLI with OTEL instrumentation."""
 
-import os
 import sys
 import subprocess
 import uuid
@@ -10,58 +9,78 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_NAMESPACE
+from opentelemetry.sdk.trace.sampling import (
+    ALWAYS_ON,
+    ALWAYS_OFF,
+    TraceIdRatioBased,
+    Sampler,
+)
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.trace import Status, StatusCode
 
+from claude_otel.config import get_config, OTelConfig
 
-def get_resource() -> Resource:
-    """Build OTEL resource from environment."""
-    service_name = os.environ.get("OTEL_SERVICE_NAME", "claude-cli")
-    service_namespace = os.environ.get("OTEL_SERVICE_NAMESPACE", "claude-otel")
 
+def get_sampler(config: OTelConfig) -> Sampler:
+    """Create sampler based on configuration."""
+    sampler_name = config.traces_sampler.lower()
+
+    if sampler_name == "always_off":
+        return ALWAYS_OFF
+
+    if sampler_name == "traceidratio":
+        try:
+            ratio = float(config.traces_sampler_arg or "1.0")
+            return TraceIdRatioBased(ratio)
+        except (ValueError, TypeError):
+            if config.debug:
+                print(f"[claude-otel] Invalid sampler ratio, using always_on", file=sys.stderr)
+            return ALWAYS_ON
+
+    # Default: always_on
+    return ALWAYS_ON
+
+
+def get_resource(config: OTelConfig) -> Resource:
+    """Build OTEL resource from configuration."""
     attrs = {
-        SERVICE_NAME: service_name,
-        SERVICE_NAMESPACE: service_namespace,
+        SERVICE_NAME: config.service_name,
+        SERVICE_NAMESPACE: config.service_namespace,
     }
 
-    # Parse additional resource attributes from OTEL_RESOURCE_ATTRIBUTES
-    extra_attrs = os.environ.get("OTEL_RESOURCE_ATTRIBUTES", "")
-    if extra_attrs:
-        for pair in extra_attrs.split(","):
-            if "=" in pair:
-                key, value = pair.split("=", 1)
-                attrs[key.strip()] = value.strip()
+    # Merge additional resource attributes
+    attrs.update(config.resource_attributes)
 
     return Resource.create(attrs)
 
 
-def get_exporter() -> Optional[OTLPSpanExporter]:
-    """Create OTLP exporter based on environment configuration."""
-    endpoint = os.environ.get(
-        "OTEL_EXPORTER_OTLP_ENDPOINT",
-        "http://100.91.20.46:4317"
-    )
+def get_exporter(config: OTelConfig) -> Optional[OTLPSpanExporter]:
+    """Create OTLP exporter based on configuration."""
+    if not config.traces_enabled:
+        if config.debug:
+            print("[claude-otel] Traces export disabled", file=sys.stderr)
+        return None
 
-    # Handle protocol preference (default gRPC)
-    protocol = os.environ.get("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
-    if protocol != "grpc":
+    if not config.is_grpc:
         # For now, only gRPC is implemented; HTTP is optional per PRD
-        print(f"[claude-otel] Warning: protocol '{protocol}' not supported, using gRPC",
+        print(f"[claude-otel] Warning: protocol '{config.protocol}' not supported, using gRPC",
               file=sys.stderr)
 
     try:
-        return OTLPSpanExporter(endpoint=endpoint, insecure=True)
+        return OTLPSpanExporter(endpoint=config.endpoint, insecure=True)
     except Exception as e:
         print(f"[claude-otel] Warning: failed to create exporter: {e}", file=sys.stderr)
         return None
 
 
-def setup_tracing() -> trace.Tracer:
-    """Initialize OTEL tracing with configured exporter."""
-    resource = get_resource()
-    provider = TracerProvider(resource=resource)
+def setup_tracing(config: OTelConfig) -> trace.Tracer:
+    """Initialize OTEL tracing with configured exporter and sampler."""
+    resource = get_resource(config)
+    sampler = get_sampler(config)
 
-    exporter = get_exporter()
+    provider = TracerProvider(resource=resource, sampler=sampler)
+
+    exporter = get_exporter(config)
     if exporter:
         processor = BatchSpanProcessor(exporter)
         provider.add_span_processor(processor)
@@ -120,15 +139,19 @@ def run_claude(args: list[str], tracer: trace.Tracer) -> int:
 
 def main() -> int:
     """CLI entry point."""
-    # Check for debug mode
-    debug = os.environ.get("CLAUDE_OTEL_DEBUG", "").lower() in ("1", "true", "yes")
+    config = get_config()
 
-    if debug:
+    if config.debug:
         print("[claude-otel] Debug mode enabled", file=sys.stderr)
-        print(f"[claude-otel] OTEL endpoint: {os.environ.get('OTEL_EXPORTER_OTLP_ENDPOINT', 'default')}",
-              file=sys.stderr)
+        print(f"[claude-otel] Endpoint: {config.endpoint}", file=sys.stderr)
+        print(f"[claude-otel] Protocol: {config.protocol}", file=sys.stderr)
+        print(f"[claude-otel] Service: {config.service_name}", file=sys.stderr)
+        print(f"[claude-otel] Traces: {config.traces_exporter}", file=sys.stderr)
+        print(f"[claude-otel] Logs: {config.logs_exporter}", file=sys.stderr)
+        print(f"[claude-otel] Metrics: {config.metrics_exporter}", file=sys.stderr)
+        print(f"[claude-otel] Sampler: {config.traces_sampler}", file=sys.stderr)
 
-    tracer = setup_tracing()
+    tracer = setup_tracing(config)
 
     # Pass all CLI arguments to Claude
     args = sys.argv[1:]
