@@ -6,7 +6,7 @@ import uuid
 from typing import Optional
 
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import TracerProvider, SpanProcessor
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_NAMESPACE
 from opentelemetry.sdk.trace.sampling import (
@@ -17,6 +17,7 @@ from opentelemetry.sdk.trace.sampling import (
 )
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.trace import Status, StatusCode
+from opentelemetry.sdk.trace.export import SpanExporter
 
 from claude_otel.config import get_config, OTelConfig
 from claude_otel.pii import sanitize_attribute, safe_attributes
@@ -56,7 +57,10 @@ def get_resource(config: OTelConfig) -> Resource:
 
 
 def get_exporter(config: OTelConfig) -> Optional[OTLPSpanExporter]:
-    """Create OTLP exporter based on configuration."""
+    """Create OTLP exporter based on configuration.
+
+    Uses exporter_timeout_ms from config for network request timeouts.
+    """
     if not config.traces_enabled:
         if config.debug:
             print("[claude-otel] Traces export disabled", file=sys.stderr)
@@ -68,14 +72,43 @@ def get_exporter(config: OTelConfig) -> Optional[OTLPSpanExporter]:
               file=sys.stderr)
 
     try:
-        return OTLPSpanExporter(endpoint=config.endpoint, insecure=True)
+        return OTLPSpanExporter(
+            endpoint=config.endpoint,
+            insecure=True,
+            timeout=config.exporter_timeout_ms / 1000,  # Convert ms to seconds
+        )
     except Exception as e:
         print(f"[claude-otel] Warning: failed to create exporter: {e}", file=sys.stderr)
         return None
 
 
+def create_batch_processor(exporter: SpanExporter, config: OTelConfig) -> BatchSpanProcessor:
+    """Create BatchSpanProcessor with resilience configuration.
+
+    Configures bounded queues and drop policy for graceful degradation:
+    - max_queue_size: Maximum spans to buffer (drops oldest when full)
+    - max_export_batch_size: Maximum spans per export batch
+    - export_timeout_millis: Timeout for each export attempt
+    - schedule_delay_millis: Delay between scheduled exports
+
+    When the queue is full, new spans are dropped rather than blocking.
+    This ensures the application remains responsive even when the
+    collector is unreachable.
+    """
+    return BatchSpanProcessor(
+        exporter,
+        max_queue_size=config.bsp_max_queue_size,
+        max_export_batch_size=config.bsp_max_export_batch_size,
+        export_timeout_millis=config.bsp_export_timeout_ms,
+        schedule_delay_millis=config.bsp_schedule_delay_ms,
+    )
+
+
 def setup_tracing(config: OTelConfig) -> trace.Tracer:
-    """Initialize OTEL tracing with configured exporter and sampler."""
+    """Initialize OTEL tracing with configured exporter and sampler.
+
+    Uses resilience configuration for bounded queues and drop policy.
+    """
     resource = get_resource(config)
     sampler = get_sampler(config)
 
@@ -83,8 +116,15 @@ def setup_tracing(config: OTelConfig) -> trace.Tracer:
 
     exporter = get_exporter(config)
     if exporter:
-        processor = BatchSpanProcessor(exporter)
+        processor = create_batch_processor(exporter, config)
         provider.add_span_processor(processor)
+
+        if config.debug:
+            print(f"[claude-otel] BatchSpanProcessor configured:", file=sys.stderr)
+            print(f"[claude-otel]   max_queue_size: {config.bsp_max_queue_size}", file=sys.stderr)
+            print(f"[claude-otel]   max_export_batch_size: {config.bsp_max_export_batch_size}", file=sys.stderr)
+            print(f"[claude-otel]   export_timeout_ms: {config.bsp_export_timeout_ms}", file=sys.stderr)
+            print(f"[claude-otel]   schedule_delay_ms: {config.bsp_schedule_delay_ms}", file=sys.stderr)
 
     trace.set_tracer_provider(provider)
     return trace.get_tracer("claude-otel", "0.1.0")

@@ -75,6 +75,21 @@ CLAUDE_OTEL_DEBUG=1 claude-otel "Hello"
 | `CLAUDE_OTEL_REDACT_CONFIG` | (none) | Path to JSON config file for redaction rules |
 | `CLAUDE_OTEL_REDACT_DISABLE_DEFAULTS` | `false` | Set to `true` to disable built-in redaction patterns |
 
+### Resilience (Bounded Queues / Drop Policy)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_BSP_MAX_QUEUE_SIZE` | `2048` | Max spans to buffer before dropping |
+| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | `512` | Max spans per export batch |
+| `OTEL_BSP_EXPORT_TIMEOUT` | `30000` | Export timeout in milliseconds |
+| `OTEL_BSP_SCHEDULE_DELAY` | `5000` | Delay between exports in milliseconds |
+| `OTEL_EXPORTER_OTLP_TIMEOUT` | `10000` | OTLP request timeout in milliseconds |
+
+These settings ensure graceful degradation when the collector is unreachable:
+- **Bounded queues**: Limits memory usage by capping buffered spans
+- **Drop policy**: When the queue is full, oldest spans are dropped (non-blocking)
+- **Timeouts**: Prevents indefinite blocking on network issues
+
 ### Debug
 
 | Variable | Default | Description |
@@ -223,10 +238,17 @@ export CLAUDE_OTEL_MAX_PAYLOAD_BYTES=512
 
 ### High Latency / Slow Startup
 
-If the collector is unreachable, the wrapper may block briefly on span export. Use batching defaults or disable export for testing:
+If the collector is unreachable, the wrapper uses bounded queues and timeouts to prevent blocking. You can tune these settings or disable export entirely:
 
 ```bash
-# Disable for quick local testing
+# Reduce timeouts for faster failure
+export OTEL_EXPORTER_OTLP_TIMEOUT=1000  # 1 second
+export OTEL_BSP_EXPORT_TIMEOUT=5000     # 5 seconds
+
+# Reduce queue size to limit memory usage
+export OTEL_BSP_MAX_QUEUE_SIZE=100
+
+# Or disable for quick local testing
 export OTEL_TRACES_EXPORTER=none
 ```
 

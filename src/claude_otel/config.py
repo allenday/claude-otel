@@ -18,6 +18,13 @@ Redaction configuration:
   CLAUDE_OTEL_REDACT_PATTERNS   - Comma-separated regex patterns to redact (legacy)
   CLAUDE_OTEL_REDACT_ALLOWLIST  - Comma-separated regex patterns to never redact
   CLAUDE_OTEL_REDACT_DISABLE_DEFAULTS - Set to 'true' to disable built-in patterns
+
+Resilience configuration:
+  OTEL_BSP_MAX_QUEUE_SIZE       - Max queue size for batch processor (default: 2048)
+  OTEL_BSP_MAX_EXPORT_BATCH_SIZE - Max batch size for export (default: 512)
+  OTEL_BSP_EXPORT_TIMEOUT       - Export timeout in milliseconds (default: 30000)
+  OTEL_BSP_SCHEDULE_DELAY       - Delay between exports in milliseconds (default: 5000)
+  OTEL_EXPORTER_OTLP_TIMEOUT    - OTLP exporter timeout in milliseconds (default: 10000)
 """
 
 import json
@@ -32,6 +39,13 @@ DEFAULT_ENDPOINT = "http://100.91.20.46:4317"
 DEFAULT_PROTOCOL = "grpc"
 DEFAULT_SERVICE_NAME = "claude-cli"
 DEFAULT_SERVICE_NAMESPACE = "claude-otel"
+
+# Resilience defaults - tuned for graceful degradation when collector is unreachable
+DEFAULT_BSP_MAX_QUEUE_SIZE = 2048       # Max spans to buffer before dropping
+DEFAULT_BSP_MAX_EXPORT_BATCH_SIZE = 512  # Max spans per export batch
+DEFAULT_BSP_EXPORT_TIMEOUT_MS = 30000    # Export timeout (30s)
+DEFAULT_BSP_SCHEDULE_DELAY_MS = 5000     # Delay between exports (5s)
+DEFAULT_EXPORTER_TIMEOUT_MS = 10000      # OTLP request timeout (10s)
 
 
 @dataclass
@@ -229,6 +243,13 @@ class OTelConfig:
     # Debug mode
     debug: bool = False
 
+    # Resilience configuration (bounded queues/drop policy)
+    bsp_max_queue_size: int = DEFAULT_BSP_MAX_QUEUE_SIZE
+    bsp_max_export_batch_size: int = DEFAULT_BSP_MAX_EXPORT_BATCH_SIZE
+    bsp_export_timeout_ms: int = DEFAULT_BSP_EXPORT_TIMEOUT_MS
+    bsp_schedule_delay_ms: int = DEFAULT_BSP_SCHEDULE_DELAY_MS
+    exporter_timeout_ms: int = DEFAULT_EXPORTER_TIMEOUT_MS
+
     @property
     def traces_enabled(self) -> bool:
         """Check if trace export is enabled."""
@@ -282,6 +303,17 @@ def parse_resource_attributes(attr_string: str) -> dict:
     return attrs
 
 
+def _parse_int_env(name: str, default: int) -> int:
+    """Parse integer from environment variable with fallback to default."""
+    val = os.environ.get(name, "")
+    if not val:
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
+
 def load_config() -> OTelConfig:
     """Load OTEL configuration from environment variables."""
     debug_val = os.environ.get("CLAUDE_OTEL_DEBUG", "").lower()
@@ -300,6 +332,12 @@ def load_config() -> OTelConfig:
         traces_sampler=os.environ.get("OTEL_TRACES_SAMPLER", "always_on"),
         traces_sampler_arg=os.environ.get("OTEL_TRACES_SAMPLER_ARG"),
         debug=debug_val in ("1", "true", "yes"),
+        # Resilience configuration
+        bsp_max_queue_size=_parse_int_env("OTEL_BSP_MAX_QUEUE_SIZE", DEFAULT_BSP_MAX_QUEUE_SIZE),
+        bsp_max_export_batch_size=_parse_int_env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", DEFAULT_BSP_MAX_EXPORT_BATCH_SIZE),
+        bsp_export_timeout_ms=_parse_int_env("OTEL_BSP_EXPORT_TIMEOUT", DEFAULT_BSP_EXPORT_TIMEOUT_MS),
+        bsp_schedule_delay_ms=_parse_int_env("OTEL_BSP_SCHEDULE_DELAY", DEFAULT_BSP_SCHEDULE_DELAY_MS),
+        exporter_timeout_ms=_parse_int_env("OTEL_EXPORTER_OTLP_TIMEOUT", DEFAULT_EXPORTER_TIMEOUT_MS),
     )
 
 

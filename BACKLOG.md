@@ -36,4 +36,4 @@ Package configuration lives in `pyproject.toml`.
   - Extracts token usage (input_tokens, output_tokens, cache_read, cache_creation) from Claude transcript
   - Adds tokens.* span attributes: tokens.input, tokens.output, tokens.cache_read, tokens.cache_creation, tokens.total
   - Tests added in `tests/test_hooks.py`
-- [charlie] Add resilience features (bounded queues/drop policy, retries).
+- [x] Add resilience features (bounded queues/drop policy, retries).
