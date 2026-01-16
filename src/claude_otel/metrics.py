@@ -1,0 +1,202 @@
+"""OTEL metrics for Claude CLI instrumentation.
+
+Provides counters and gauges for tool call telemetry:
+- tool_calls_total: Counter of total tool invocations (with tool.name label)
+- tool_calls_errors_total: Counter of tool call errors (with tool.name label)
+- tool_calls_in_flight: Gauge of currently executing tools
+
+Uses centralized config from claude_otel.config.
+"""
+
+from typing import Optional
+
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_NAMESPACE
+
+from claude_otel.config import get_config, OTelConfig
+
+
+_meter_provider: Optional[MeterProvider] = None
+_meter: Optional[metrics.Meter] = None
+
+# Metric instruments (initialized lazily)
+_tool_calls_counter: Optional[metrics.Counter] = None
+_tool_errors_counter: Optional[metrics.Counter] = None
+_tool_duration_histogram: Optional[metrics.Histogram] = None
+_in_flight_gauge_value: int = 0
+
+
+def _create_metric_exporter(config: OTelConfig):
+    """Create OTLP metric exporter based on protocol."""
+    if config.is_grpc:
+        from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+        return OTLPMetricExporter(endpoint=config.endpoint, insecure=True)
+    else:
+        from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+        # HTTP endpoint uses /v1/metrics path
+        endpoint = config.http_endpoint
+        if not endpoint.endswith("/v1/metrics"):
+            endpoint = endpoint.rstrip("/") + "/v1/metrics"
+        return OTLPMetricExporter(endpoint=endpoint)
+
+
+def _create_resource(config: OTelConfig) -> Resource:
+    """Create OTEL resource from config."""
+    attrs = {
+        SERVICE_NAME: config.service_name,
+        SERVICE_NAMESPACE: config.service_namespace,
+    }
+    attrs.update(config.resource_attributes)
+    return Resource.create(attrs)
+
+
+def configure_metrics(config: Optional[OTelConfig] = None) -> Optional[MeterProvider]:
+    """Configure OTEL metrics with OTLP exporter.
+
+    Args:
+        config: Optional OTelConfig. If None, loads from environment.
+
+    Returns:
+        MeterProvider if metrics enabled, None otherwise.
+    """
+    global _meter_provider, _meter
+
+    if config is None:
+        config = get_config()
+
+    if not config.metrics_enabled:
+        if config.debug:
+            import sys
+            print("[claude-otel] Metrics export disabled", file=sys.stderr)
+        return None
+
+    if _meter_provider is not None:
+        return _meter_provider
+
+    resource = _create_resource(config)
+
+    try:
+        exporter = _create_metric_exporter(config)
+        reader = PeriodicExportingMetricReader(
+            exporter,
+            export_interval_millis=10000,  # 10 second export interval
+        )
+        _meter_provider = MeterProvider(resource=resource, metric_readers=[reader])
+        metrics.set_meter_provider(_meter_provider)
+        _meter = _meter_provider.get_meter("claude-otel", "0.1.0")
+
+        if config.debug:
+            import sys
+            print(f"[claude-otel] Metrics configured: {config.endpoint}", file=sys.stderr)
+
+    except Exception as e:
+        import sys
+        print(f"[claude-otel] Warning: failed to configure metrics: {e}", file=sys.stderr)
+        return None
+
+    return _meter_provider
+
+
+def get_meter() -> Optional[metrics.Meter]:
+    """Get the configured meter for creating instruments.
+
+    Returns:
+        Meter if configured, None otherwise.
+    """
+    return _meter
+
+
+def _ensure_instruments():
+    """Lazily initialize metric instruments."""
+    global _tool_calls_counter, _tool_errors_counter, _tool_duration_histogram
+
+    if _meter is None:
+        return
+
+    if _tool_calls_counter is None:
+        _tool_calls_counter = _meter.create_counter(
+            name="claude.tool_calls_total",
+            description="Total number of tool calls",
+            unit="1",
+        )
+
+    if _tool_errors_counter is None:
+        _tool_errors_counter = _meter.create_counter(
+            name="claude.tool_calls_errors_total",
+            description="Total number of tool call errors",
+            unit="1",
+        )
+
+    if _tool_duration_histogram is None:
+        _tool_duration_histogram = _meter.create_histogram(
+            name="claude.tool_call_duration_ms",
+            description="Duration of tool calls in milliseconds",
+            unit="ms",
+        )
+
+
+def record_tool_call(tool_name: str, duration_ms: float, error: bool = False):
+    """Record a tool call metric.
+
+    Args:
+        tool_name: Name of the tool invoked.
+        duration_ms: Duration of the call in milliseconds.
+        error: Whether the call resulted in an error.
+    """
+    _ensure_instruments()
+
+    if _tool_calls_counter is None:
+        return
+
+    attributes = {"tool.name": tool_name}
+
+    _tool_calls_counter.add(1, attributes)
+    _tool_duration_histogram.add(duration_ms, attributes)
+
+    if error:
+        _tool_errors_counter.add(1, attributes)
+
+
+def record_session_start():
+    """Record the start of a Claude session."""
+    _ensure_instruments()
+
+    if _meter is None:
+        return
+
+    # We use an UpDownCounter for in-flight since we can increment/decrement
+    global _in_flight_gauge_value
+    _in_flight_gauge_value += 1
+
+
+def record_session_end():
+    """Record the end of a Claude session."""
+    global _in_flight_gauge_value
+    _in_flight_gauge_value = max(0, _in_flight_gauge_value - 1)
+
+
+def get_in_flight_count() -> int:
+    """Get current in-flight session count.
+
+    Returns:
+        Number of sessions currently in progress.
+    """
+    return _in_flight_gauge_value
+
+
+def shutdown_metrics():
+    """Shutdown the meter provider and flush pending metrics."""
+    global _meter_provider, _meter, _tool_calls_counter, _tool_errors_counter
+    global _tool_duration_histogram, _in_flight_gauge_value
+
+    if _meter_provider is not None:
+        _meter_provider.shutdown()
+        _meter_provider = None
+
+    _meter = None
+    _tool_calls_counter = None
+    _tool_errors_counter = None
+    _tool_duration_histogram = None
+    _in_flight_gauge_value = 0
