@@ -33,6 +33,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: marks tests as integration tests (require bastion connectivity)",
+    "integration: marks tests as integration tests (require collector connectivity)",
 ]
 testpaths = ["tests"]

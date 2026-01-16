@@ -1,9 +1,9 @@
-"""Integration tests - send dummy span/log to bastion OTLP endpoint.
+"""Integration tests - send dummy span/log to the OTLP endpoint.
 
 These tests verify that the OTEL exporters can successfully connect
-and send data to the bastion collector at 100.91.20.46:4317.
+and send data to the collector (default localhost:4317).
 
-To run these tests, ensure you have network connectivity to the bastion.
+To run these tests, ensure you have network connectivity to the collector.
 Tests are marked with @pytest.mark.integration for selective running.
 
 Usage:
@@ -34,13 +34,13 @@ from claude_otel.config import get_config, reset_config, load_config
 pytestmark = pytest.mark.integration
 
 
-# Bastion endpoint from PRD
-BASTION_ENDPOINT = "http://100.91.20.46:4317"
+# Collector endpoint from PRD (override via env for real runs)
+COLLECTOR_ENDPOINT = os.environ.get("OTEL_TEST_COLLECTOR", "http://localhost:4317")
 
 
 @pytest.fixture
 def integration_tracer():
-    """Create a tracer configured to send to bastion."""
+    """Create a tracer configured to send to the collector."""
     resource = Resource.create({
         SERVICE_NAME: "claude-otel-test",
         SERVICE_NAMESPACE: "claude-otel-integration",
@@ -50,11 +50,11 @@ def integration_tracer():
     provider = TracerProvider(resource=resource)
 
     try:
-        exporter = OTLPSpanExporter(endpoint=BASTION_ENDPOINT, insecure=True)
+        exporter = OTLPSpanExporter(endpoint=COLLECTOR_ENDPOINT, insecure=True)
         # Use SimpleSpanProcessor for immediate export in tests
         provider.add_span_processor(SimpleSpanProcessor(exporter))
     except Exception as e:
-        pytest.skip(f"Could not connect to bastion: {e}")
+        pytest.skip(f"Could not connect to collector: {e}")
 
     tracer = provider.get_tracer("integration-test", "0.1.0")
 
@@ -64,11 +64,11 @@ def integration_tracer():
     provider.shutdown()
 
 
-class TestBastionConnectivity:
-    """Tests for connectivity to bastion OTLP endpoint."""
+class TestCollectorConnectivity:
+    """Tests for connectivity to OTLP endpoint."""
 
     def test_can_send_simple_span(self, integration_tracer):
-        """Verify we can send a simple span to bastion."""
+        """Verify we can send a simple span to the collector."""
         test_id = str(uuid.uuid4())
 
         with integration_tracer.start_as_current_span("integration-test-span") as span:
@@ -143,7 +143,7 @@ class TestBastionConnectivity:
 
 
 class TestConfigIntegration:
-    """Tests that config correctly targets bastion endpoint."""
+    """Tests that config correctly targets the collector endpoint."""
 
     def setup_method(self):
         """Reset config before each test."""
@@ -153,10 +153,10 @@ class TestConfigIntegration:
         """Reset config after each test."""
         reset_config()
 
-    def test_default_endpoint_is_bastion(self):
-        """Default endpoint should be the bastion collector."""
+    def test_default_endpoint_is_localhost(self):
+        """Default endpoint should be the localhost collector."""
         config = load_config()
-        assert "100.91.20.46" in config.endpoint
+        assert "localhost" in config.endpoint
         assert "4317" in config.endpoint
 
     def test_default_protocol_is_grpc(self):

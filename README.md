@@ -27,7 +27,7 @@ All arguments are passed through to the underlying `claude` command. The wrapper
 ### Quick Start
 
 ```bash
-# Minimal setup - uses default bastion collector
+# Minimal setup - uses default collector
 claude-otel "Hello, Claude"
 
 # With custom endpoint
@@ -43,7 +43,7 @@ CLAUDE_OTEL_DEBUG=1 claude-otel "Hello"
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://100.91.20.46:4317` | OTLP collector endpoint |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | Protocol: `grpc` or `http` |
 | `OTEL_SERVICE_NAME` | `claude-cli` | Service name for traces/logs |
 | `OTEL_SERVICE_NAMESPACE` | `claude-otel` | Service namespace |
@@ -132,6 +132,23 @@ export OTEL_METRICS_EXPORTER=otlp
 claude-otel "Hello"
 ```
 
+### Collector / Loki example
+
+```bash
+# Collector (gRPC 4317) with logs -> Loki
+OTEL_EXPORTER_OTLP_ENDPOINT="http://collector:4317" \
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc \
+OTEL_TRACES_EXPORTER=otlp \
+OTEL_LOGS_EXPORTER=otlp \
+OTEL_METRICS_EXPORTER=otlp \
+OTEL_SERVICE_NAME="claude-cli" \
+OTEL_RESOURCE_ATTRIBUTES="service.namespace=example" \
+CLAUDE_TELEMETRY_DEBUG=1 \
+claude-otel -p "hello"
+```
+
+You should see logs in Loki under `service_name="example/claude-cli"`. Ensure `/root/.claude/debug` (Claude CLI debug dir) is writable if running as root.
+
 ## Troubleshooting
 
 ### "claude command not found"
@@ -147,7 +164,7 @@ which claude
 
 1. Verify the collector endpoint is reachable:
    ```bash
-   curl -v http://100.91.20.46:4317
+   curl -v http://localhost:4317
    ```
 
 2. Check protocol consistency - don't mix gRPC endpoint with HTTP protocol:

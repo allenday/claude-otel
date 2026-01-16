@@ -1,5 +1,6 @@
 """Lightweight wrapper that shells out to Claude CLI with OTEL instrumentation."""
 
+import logging
 import sys
 import subprocess
 import uuid
@@ -18,6 +19,10 @@ from opentelemetry.sdk.trace.sampling import (
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.trace import Status, StatusCode
 from opentelemetry.sdk.trace.export import SpanExporter
+
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
 from claude_otel.config import get_config, OTelConfig
 from claude_otel.pii import sanitize_attribute, safe_attributes
@@ -130,9 +135,29 @@ def setup_tracing(config: OTelConfig) -> trace.Tracer:
     return trace.get_tracer("claude-otel", "0.1.0")
 
 
-def run_claude(args: list[str], tracer: trace.Tracer) -> int:
+def setup_logging(config: OTelConfig) -> tuple[Optional[logging.Logger], Optional[LoggerProvider]]:
+    """Initialize OTEL logging and return a logger hooked to the OTLP exporter."""
+    if not config.logs_enabled:
+        return None, None
+
+    resource = get_resource(config)
+    provider = LoggerProvider(resource=resource)
+    exporter = OTLPLogExporter(endpoint=config.endpoint, insecure=True)
+    provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+
+    handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+    logger = logging.getLogger("claude-otel")
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    logger.propagate = False
+
+    return logger, provider
+
+
+def run_claude(args: list[str], tracer: trace.Tracer, logger: Optional[logging.Logger]) -> int:
     """Run Claude CLI within a session span."""
     session_id = str(uuid.uuid4())
+    preview = None
 
     with tracer.start_as_current_span("claude-session") as span:
         span.set_attribute("session.id", session_id)
@@ -144,6 +169,15 @@ def run_claude(args: list[str], tracer: trace.Tracer) -> int:
             preview = " ".join(args)
             sanitized_preview, _ = sanitize_attribute(preview, max_length=100)
             span.set_attribute("claude.args_preview", sanitized_preview)
+
+        if logger:
+            logger.info(
+                "claude session start",
+                extra={
+                    "session_id": session_id,
+                    "args_preview": preview[:100] if preview else "",
+                },
+            )
 
         try:
             # Shell out to Claude CLI, passing through all arguments
@@ -161,12 +195,26 @@ def run_claude(args: list[str], tracer: trace.Tracer) -> int:
             else:
                 span.set_status(Status(StatusCode.OK))
 
+            if logger:
+                logger.info(
+                    "claude session end",
+                    extra={
+                        "session_id": session_id,
+                        "exit_code": result.returncode,
+                    },
+                )
+
             return result.returncode
 
         except FileNotFoundError:
             span.set_status(Status(StatusCode.ERROR, "Claude CLI not found"))
             span.set_attribute("error", True)
             span.set_attribute("error.message", "Claude CLI not found in PATH")
+            if logger:
+                logger.error(
+                    "claude CLI not found",
+                    extra={"session_id": session_id},
+                )
             print("[claude-otel] Error: 'claude' command not found in PATH", file=sys.stderr)
             return 1
 
@@ -175,6 +223,14 @@ def run_claude(args: list[str], tracer: trace.Tracer) -> int:
             span.set_attribute("error", True)
             error_msg, _ = sanitize_attribute(str(e), max_length=500)
             span.set_attribute("error.message", error_msg)
+            if logger:
+                logger.error(
+                    "claude CLI error",
+                    extra={
+                        "session_id": session_id,
+                        "error_message": error_msg,
+                    },
+                )
             print(f"[claude-otel] Error: {e}", file=sys.stderr)
             return 1
 
@@ -194,11 +250,16 @@ def main() -> int:
         print(f"[claude-otel] Sampler: {config.traces_sampler}", file=sys.stderr)
 
     tracer = setup_tracing(config)
+    logger, logger_provider = setup_logging(config)
 
     # Pass all CLI arguments to Claude
     args = sys.argv[1:]
 
-    return run_claude(args, tracer)
+    try:
+        return run_claude(args, tracer, logger)
+    finally:
+        if logger_provider:
+            logger_provider.shutdown()
 
 
 if __name__ == "__main__":

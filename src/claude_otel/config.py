@@ -1,7 +1,7 @@
 """Centralized OTEL configuration via environment variables.
 
 Supported environment variables (per PRD):
-  OTEL_EXPORTER_OTLP_ENDPOINT   - Collector endpoint (default: http://100.91.20.46:4317)
+  OTEL_EXPORTER_OTLP_ENDPOINT   - Collector endpoint (default: http://localhost:4317)
   OTEL_EXPORTER_OTLP_PROTOCOL   - Protocol: grpc or http (default: grpc)
   OTEL_SERVICE_NAME             - Service name (default: claude-cli)
   OTEL_SERVICE_NAMESPACE        - Service namespace (default: claude-otel)
@@ -34,8 +34,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 
-# Default bastion collector endpoint
-DEFAULT_ENDPOINT = "http://100.91.20.46:4317"
+# Default collector endpoint (override in env per deployment)
+DEFAULT_ENDPOINT = "http://localhost:4317"
 DEFAULT_PROTOCOL = "grpc"
 DEFAULT_SERVICE_NAME = "claude-cli"
 DEFAULT_SERVICE_NAMESPACE = "claude-otel"

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Manual smoke test script for claude-otel.
 
-Run this script to verify connectivity to the bastion OTEL collector
+Run this script to verify connectivity to the OTEL collector
 and confirm traces/metrics are being accepted.
 
 Usage:
     python tests/smoke_test.py
 
 Environment:
-    The script uses the default bastion endpoint (100.91.20.46:4317).
+    The script uses the default endpoint (localhost:4317).
     Set OTEL_EXPORTER_OTLP_ENDPOINT to override.
 
 Exit codes:
@@ -34,7 +34,7 @@ from opentelemetry.trace import Status, StatusCode
 
 
 # Configuration
-DEFAULT_ENDPOINT = "http://100.91.20.46:4317"
+DEFAULT_ENDPOINT = "http://localhost:4317"
 SERVICE_NAME_VAL = "claude-otel-smoke-test"
 
 

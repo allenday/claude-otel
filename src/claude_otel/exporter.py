@@ -1,10 +1,10 @@
 """OTEL exporter configuration for traces and logs.
 
-Configures OTLP exporters to send telemetry to the bastion collector.
+Configures OTLP exporters to send telemetry to the configured collector.
 Supports both gRPC (default, port 4317) and HTTP (port 4318) protocols.
 
 Environment variables:
-    OTEL_EXPORTER_OTLP_ENDPOINT: Collector endpoint (default: http://100.91.20.46:4317)
+    OTEL_EXPORTER_OTLP_ENDPOINT: Collector endpoint (default: http://localhost:4317)
     OTEL_EXPORTER_OTLP_PROTOCOL: Protocol - 'grpc' (default) or 'http/protobuf'
     OTEL_SERVICE_NAME: Service name for resource attributes (default: claude-cli)
     OTEL_RESOURCE_ATTRIBUTES: Additional resource attributes as key=value,key2=value2
@@ -32,8 +32,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
-# Default bastion endpoint
-DEFAULT_ENDPOINT = "http://100.91.20.46:4317"
+# Default collector endpoint
+DEFAULT_ENDPOINT = "http://localhost:4317"
 DEFAULT_SERVICE_NAME = "claude-cli"
 DEFAULT_PROTOCOL = "grpc"
 

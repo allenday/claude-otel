@@ -15,17 +15,17 @@ Package configuration lives in `pyproject.toml`.
 ## Milestone 1: MVP OTEL Wrapper
 - [x] Implement a lightweight wrapper script (e.g., `bin/claude-otel`) that shells out to Claude CLI/SDK with OTEL hooks.
 - [x] Emit session span and child spans for tool uses (attributes: tool.name, duration_ms, exit_code/error flag, stdout_bytes, stderr_bytes, truncated flags, input summary, prompt/session IDs).
-- [x] Export traces and logs via OTLP to bastion (default gRPC 4317; HTTP optional).
+- [x] Export traces and logs via OTLP to the collector (default gRPC 4317; HTTP optional).
 - [x] Export basic metrics (counters: tool_calls total/per tool; gauge: in-flight tools if applicable).
 - [x] Config via env (OTEL_*), with a single coherent protocol/endpoint; default to gRPC 4317.
 - [x] Apply lightweight PII safeguards: truncate tool inputs/outputs, avoid storing raw large payloads.
-- [x] Add unit tests for hook logic (span creation, duration calc, error paths) and a local integration test that sends a dummy span/log to bastion.
+- [x] Add unit tests for hook logic (span creation, duration calc, error paths) and a local integration test that sends a dummy span/log to the collector.
 
 ## Milestone 2: Deployment & Validation
 - [x] Add a small docs section in the repo (usage, env vars, troubleshooting).
-- [x] Run a manual smoke session; verify `service_name` appears in Loki and metrics counters increment on bastion.
+- [x] Run a manual smoke session; verify `service_name` appears in Loki and metrics counters increment on the collector.
   - Smoke test script added: `tests/smoke_test.py`
-  - Traces and metrics accepted by OTLP collector at bastion:4317 ✓
+  - Traces and metrics accepted by OTLP collector at 4317 ✓
   - Note: Loki shows only promtail (span-to-logs processor not configured); Prometheus doesn't expose OTLP metrics directly. Both require collector config changes (see optional task below).
 - [ ] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested).
 

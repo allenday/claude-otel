@@ -7,7 +7,7 @@
 ## Goals
 - Emit OTEL traces and logs for every Claude CLI session and tool use.
 - Capture tool-level metrics: duration, exit status/errors, stdout/stderr size, tool name, input summary, prompt/session IDs.
-- Deliver data to our OTEL collector on bastion (`100.91.20.46:4317` gRPC, 4318 HTTP) and store logs in Loki.
+- Deliver data to our OTEL collector (gRPC 4317, HTTP 4318) and store logs in Loki.
 - Keep client-side setup minimal (env-based configuration).
 
 ## Non-Goals
@@ -22,7 +22,7 @@
   - Session: service.name, service.namespace, session_id, prompt preview/model, total tool count, token counts if exposed.
   - Tool span: tool.name, duration_ms, exit_code (if subprocess), error flag/message, stdout_bytes, stderr_bytes, truncated flags, input summary (truncated), interrupted/timeout indicators.
 - Exporters:
-  - Traces: OTLP to `100.91.20.46:4317` (gRPC) or `:4318` HTTP.
+  - Traces: OTLP to the configured collector endpoint (gRPC 4317) or HTTP 4318.
   - Logs: OTLP logs to same endpoint; Loki receives via collector.
 - Config via env:
   - `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL` (grpc/http), `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_TRACES_EXPORTER`, `OTEL_LOGS_EXPORTER`, `OTEL_METRICS_EXPORTER` (default none), `OTEL_TRACES_SAMPLER`.
@@ -47,7 +47,7 @@ Package is defined in `pyproject.toml` and installs the `claude-otel` CLI entry 
 
 ## Testing/Validation
 - Unit tests for hook logic (span creation, attributes, duration calc, error paths).
-- Local integration test: send a dummy span/log to bastion OTLP and confirm it appears in Loki.
+- Local integration test: send a dummy span/log to the OTLP collector and confirm it appears in Loki.
 - Manual smoke: run a Claude session with a few tool calls, verify `service_name` appears in Loki and attributes include tool metrics.
 
 ## Risks/Watchouts
