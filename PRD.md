@@ -37,6 +37,14 @@
 - Debug flag to emit local logs if export fails.
 - Minimal setup instructions (env vars + pip install).
 
+### Build & Install
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+Package is defined in `pyproject.toml` and installs the `claude-otel` CLI entry point.
+
 ## Testing/Validation
 - Unit tests for hook logic (span creation, attributes, duration calc, error paths).
 - Local integration test: send a dummy span/log to bastion OTLP and confirm it appears in Loki.

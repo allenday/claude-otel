@@ -1,5 +1,17 @@
 # Telemetry Wrapper for Claude CLI — Backlog
 
+## Working Convention
+When claiming a task, place your worker ID inside the brackets: `[ ]` → `[alpha]`.
+When complete, change to `[x]` and remove your ID.
+
+## Build & Install
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+Package configuration lives in `pyproject.toml`.
+
 ## Milestone 1: MVP OTEL Wrapper
 - [ ] Implement a lightweight wrapper script (e.g., `bin/claude-otel`) that shells out to Claude CLI/SDK with OTEL hooks.
 - [ ] Emit session span and child spans for tool uses (attributes: tool.name, duration_ms, exit_code/error flag, stdout_bytes, stderr_bytes, truncated flags, input summary, prompt/session IDs).
