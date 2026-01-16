@@ -71,6 +71,9 @@ CLAUDE_OTEL_DEBUG=1 claude-otel "Hello"
 | `CLAUDE_OTEL_MAX_ATTR_LENGTH` | `256` | Max attribute string length before truncation |
 | `CLAUDE_OTEL_MAX_PAYLOAD_BYTES` | `1024` | Max payload (stdout/stderr) bytes to capture |
 | `CLAUDE_OTEL_REDACT_PATTERNS` | (built-in) | Additional regex patterns to redact (comma-separated) |
+| `CLAUDE_OTEL_REDACT_ALLOWLIST` | (none) | Regex patterns to never redact (comma-separated) |
+| `CLAUDE_OTEL_REDACT_CONFIG` | (none) | Path to JSON config file for redaction rules |
+| `CLAUDE_OTEL_REDACT_DISABLE_DEFAULTS` | `false` | Set to `true` to disable built-in redaction patterns |
 
 ### Debug
 
@@ -174,6 +177,41 @@ The wrapper applies automatic redaction for common secret patterns. To add custo
 
 ```bash
 export CLAUDE_OTEL_REDACT_PATTERNS="(?i)my_secret_\w+,(?i)internal_token=\S+"
+```
+
+To prevent certain patterns from being redacted (allowlist):
+
+```bash
+export CLAUDE_OTEL_REDACT_ALLOWLIST="test_api_key,example_token"
+```
+
+To disable all built-in redaction patterns (use only custom patterns):
+
+```bash
+export CLAUDE_OTEL_REDACT_DISABLE_DEFAULTS=true
+export CLAUDE_OTEL_REDACT_PATTERNS="my_custom_secret_\w+"
+```
+
+For complex redaction rules, use a JSON config file:
+
+```bash
+export CLAUDE_OTEL_REDACT_CONFIG=~/.claude-otel-redact.json
+```
+
+Example config file:
+```json
+{
+  "patterns": ["custom_secret_\\w+"],
+  "allowlist": ["test_.*", "example_.*"],
+  "use_defaults": true,
+  "pattern_groups": {
+    "aws": ["AKIA[0-9A-Z]{16}", "aws_secret_\\w+"],
+    "internal": ["internal_token=\\S+"]
+  },
+  "allowlist_groups": {
+    "safe": ["dev_api_key", "staging_token"]
+  }
+}
 ```
 
 To reduce captured payload sizes:

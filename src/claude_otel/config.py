@@ -12,11 +12,19 @@ Supported environment variables (per PRD):
   OTEL_TRACES_SAMPLER           - Sampler: always_on, always_off, traceidratio (default: always_on)
   OTEL_TRACES_SAMPLER_ARG       - Sampler argument (e.g., ratio for traceidratio)
   CLAUDE_OTEL_DEBUG             - Enable debug logging (default: false)
+
+Redaction configuration:
+  CLAUDE_OTEL_REDACT_CONFIG     - Path to JSON config file for redaction rules
+  CLAUDE_OTEL_REDACT_PATTERNS   - Comma-separated regex patterns to redact (legacy)
+  CLAUDE_OTEL_REDACT_ALLOWLIST  - Comma-separated regex patterns to never redact
+  CLAUDE_OTEL_REDACT_DISABLE_DEFAULTS - Set to 'true' to disable built-in patterns
 """
 
+import json
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from pathlib import Path
+from typing import Any, Optional
 
 
 # Default bastion collector endpoint
@@ -24,6 +32,176 @@ DEFAULT_ENDPOINT = "http://100.91.20.46:4317"
 DEFAULT_PROTOCOL = "grpc"
 DEFAULT_SERVICE_NAME = "claude-cli"
 DEFAULT_SERVICE_NAMESPACE = "claude-otel"
+
+
+@dataclass
+class RedactionConfig:
+    """Configuration for PII redaction rules.
+
+    Supports:
+    - Regex patterns for redaction (things to redact)
+    - Allowlist patterns (things to never redact, even if matched)
+    - Named pattern groups for organization
+    - Disabling default built-in patterns
+    """
+
+    # Patterns to redact (regex strings)
+    patterns: list[str] = field(default_factory=list)
+
+    # Patterns to allow (never redact even if matched by patterns)
+    allowlist: list[str] = field(default_factory=list)
+
+    # Whether to include default built-in patterns
+    use_defaults: bool = True
+
+    # Named pattern groups for organization (e.g., {"aws": [...], "pii": [...]})
+    pattern_groups: dict[str, list[str]] = field(default_factory=dict)
+
+    # Named allowlist groups
+    allowlist_groups: dict[str, list[str]] = field(default_factory=dict)
+
+    def get_all_patterns(self) -> list[str]:
+        """Get all redaction patterns including from groups."""
+        all_patterns = list(self.patterns)
+        for group_patterns in self.pattern_groups.values():
+            all_patterns.extend(group_patterns)
+        return all_patterns
+
+    def get_all_allowlist(self) -> list[str]:
+        """Get all allowlist patterns including from groups."""
+        all_allowlist = list(self.allowlist)
+        for group_patterns in self.allowlist_groups.values():
+            all_allowlist.extend(group_patterns)
+        return all_allowlist
+
+
+def load_redaction_config() -> RedactionConfig:
+    """Load redaction configuration from environment and optional config file.
+
+    Precedence (later overrides earlier):
+    1. Default values
+    2. Config file (CLAUDE_OTEL_REDACT_CONFIG)
+    3. Environment variables (CLAUDE_OTEL_REDACT_*)
+
+    Returns:
+        RedactionConfig instance
+    """
+    config = RedactionConfig()
+
+    # Load from config file if specified
+    config_path = os.environ.get("CLAUDE_OTEL_REDACT_CONFIG")
+    if config_path:
+        file_config = _load_redaction_config_file(config_path)
+        if file_config:
+            config = file_config
+
+    # Override with environment variables
+    # Additional patterns from env (appended to file config)
+    env_patterns = os.environ.get("CLAUDE_OTEL_REDACT_PATTERNS", "")
+    if env_patterns:
+        for p in env_patterns.split(","):
+            p = p.strip()
+            if p and p not in config.patterns:
+                config.patterns.append(p)
+
+    # Allowlist from env (appended to file config)
+    env_allowlist = os.environ.get("CLAUDE_OTEL_REDACT_ALLOWLIST", "")
+    if env_allowlist:
+        for p in env_allowlist.split(","):
+            p = p.strip()
+            if p and p not in config.allowlist:
+                config.allowlist.append(p)
+
+    # Disable defaults from env
+    disable_defaults = os.environ.get("CLAUDE_OTEL_REDACT_DISABLE_DEFAULTS", "").lower()
+    if disable_defaults in ("1", "true", "yes"):
+        config.use_defaults = False
+
+    return config
+
+
+def _load_redaction_config_file(path: str) -> Optional[RedactionConfig]:
+    """Load redaction config from a JSON file.
+
+    Expected JSON format:
+    {
+        "patterns": ["regex1", "regex2"],
+        "allowlist": ["safe_pattern1"],
+        "use_defaults": true,
+        "pattern_groups": {
+            "aws": ["AKIA...", "aws_secret..."],
+            "pii": ["\\b\\d{3}-\\d{2}-\\d{4}\\b"]
+        },
+        "allowlist_groups": {
+            "safe": ["test_.*", "example_.*"]
+        }
+    }
+
+    Args:
+        path: Path to the JSON config file
+
+    Returns:
+        RedactionConfig if file loads successfully, None otherwise
+    """
+    try:
+        config_path = Path(path).expanduser()
+        if not config_path.exists():
+            return None
+
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        return _parse_redaction_config_dict(data)
+
+    except (json.JSONDecodeError, OSError, TypeError):
+        # Silently ignore invalid config files - use defaults
+        return None
+
+
+def _parse_redaction_config_dict(data: dict[str, Any]) -> RedactionConfig:
+    """Parse a dictionary into RedactionConfig.
+
+    Args:
+        data: Dictionary with config values
+
+    Returns:
+        RedactionConfig instance
+    """
+    patterns = data.get("patterns", [])
+    if not isinstance(patterns, list):
+        patterns = []
+    patterns = [str(p) for p in patterns if p]
+
+    allowlist = data.get("allowlist", [])
+    if not isinstance(allowlist, list):
+        allowlist = []
+    allowlist = [str(p) for p in allowlist if p]
+
+    use_defaults = data.get("use_defaults", True)
+    if not isinstance(use_defaults, bool):
+        use_defaults = str(use_defaults).lower() in ("true", "1", "yes")
+
+    pattern_groups = {}
+    raw_groups = data.get("pattern_groups", {})
+    if isinstance(raw_groups, dict):
+        for name, group_patterns in raw_groups.items():
+            if isinstance(group_patterns, list):
+                pattern_groups[str(name)] = [str(p) for p in group_patterns if p]
+
+    allowlist_groups = {}
+    raw_allowlist_groups = data.get("allowlist_groups", {})
+    if isinstance(raw_allowlist_groups, dict):
+        for name, group_patterns in raw_allowlist_groups.items():
+            if isinstance(group_patterns, list):
+                allowlist_groups[str(name)] = [str(p) for p in group_patterns if p]
+
+    return RedactionConfig(
+        patterns=patterns,
+        allowlist=allowlist,
+        use_defaults=use_defaults,
+        pattern_groups=pattern_groups,
+        allowlist_groups=allowlist_groups,
+    )
 
 
 @dataclass

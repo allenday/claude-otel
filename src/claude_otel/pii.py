@@ -7,12 +7,19 @@ pattern matching to minimize false negatives.
 Configuration via environment:
     CLAUDE_OTEL_MAX_ATTR_LENGTH: Max attribute string length (default: 256)
     CLAUDE_OTEL_MAX_PAYLOAD_BYTES: Max payload size to capture (default: 1024)
-    CLAUDE_OTEL_REDACT_PATTERNS: Comma-separated regex patterns to redact (optional)
+
+Redaction configuration (see config.py for full details):
+    CLAUDE_OTEL_REDACT_CONFIG: Path to JSON config file for redaction rules
+    CLAUDE_OTEL_REDACT_PATTERNS: Comma-separated regex patterns to redact
+    CLAUDE_OTEL_REDACT_ALLOWLIST: Comma-separated regex patterns to never redact
+    CLAUDE_OTEL_REDACT_DISABLE_DEFAULTS: Set to 'true' to disable built-in patterns
 """
 
 import os
 import re
 from typing import Any, Optional
+
+from claude_otel.config import load_redaction_config, RedactionConfig
 
 # Default limits - conservative to avoid storing large/sensitive data
 DEFAULT_MAX_ATTR_LENGTH = 256
@@ -34,6 +41,8 @@ DEFAULT_REDACT_PATTERNS = [
 ]
 
 _cached_patterns: Optional[list[re.Pattern]] = None
+_cached_allowlist: Optional[list[re.Pattern]] = None
+_cached_config: Optional[RedactionConfig] = None
 
 
 def _get_max_attr_length() -> int:
@@ -52,21 +61,30 @@ def _get_max_payload_bytes() -> int:
         return DEFAULT_MAX_PAYLOAD_BYTES
 
 
+def _get_redaction_config() -> RedactionConfig:
+    """Get the redaction configuration, using cache for efficiency."""
+    global _cached_config
+    if _cached_config is not None:
+        return _cached_config
+    _cached_config = load_redaction_config()
+    return _cached_config
+
+
 def _get_redact_patterns() -> list[re.Pattern]:
     """Get compiled redaction patterns, using cache for efficiency."""
     global _cached_patterns
     if _cached_patterns is not None:
         return _cached_patterns
 
-    patterns = list(DEFAULT_REDACT_PATTERNS)
+    config = _get_redaction_config()
+    patterns: list[str] = []
 
-    # Add any custom patterns from env
-    custom = os.environ.get("CLAUDE_OTEL_REDACT_PATTERNS", "")
-    if custom:
-        for p in custom.split(","):
-            p = p.strip()
-            if p:
-                patterns.append(p)
+    # Add default patterns if not disabled
+    if config.use_defaults:
+        patterns.extend(DEFAULT_REDACT_PATTERNS)
+
+    # Add custom patterns from config
+    patterns.extend(config.get_all_patterns())
 
     # Compile all patterns
     compiled = []
@@ -79,6 +97,44 @@ def _get_redact_patterns() -> list[re.Pattern]:
 
     _cached_patterns = compiled
     return _cached_patterns
+
+
+def _get_allowlist_patterns() -> list[re.Pattern]:
+    """Get compiled allowlist patterns, using cache for efficiency."""
+    global _cached_allowlist
+    if _cached_allowlist is not None:
+        return _cached_allowlist
+
+    config = _get_redaction_config()
+    allowlist = config.get_all_allowlist()
+
+    # Compile all patterns
+    compiled = []
+    for p in allowlist:
+        try:
+            compiled.append(re.compile(p))
+        except re.error:
+            # Skip invalid patterns silently
+            pass
+
+    _cached_allowlist = compiled
+    return _cached_allowlist
+
+
+def _is_allowlisted(text: str) -> bool:
+    """Check if text matches any allowlist pattern.
+
+    Args:
+        text: Text to check
+
+    Returns:
+        True if text matches any allowlist pattern
+    """
+    allowlist = _get_allowlist_patterns()
+    for pattern in allowlist:
+        if pattern.search(text):
+            return True
+    return False
 
 
 def truncate(value: str, max_length: Optional[int] = None) -> tuple[str, bool]:
@@ -125,6 +181,7 @@ def redact(value: str) -> str:
     """Apply redaction patterns to a string.
 
     Replaces matches with [REDACTED] to remove potential secrets.
+    Respects allowlist patterns - matched text won't be redacted.
 
     Args:
         value: String to redact.
@@ -133,10 +190,20 @@ def redact(value: str) -> str:
         String with sensitive patterns replaced.
     """
     patterns = _get_redact_patterns()
+    allowlist = _get_allowlist_patterns()
     result = value
 
     for pattern in patterns:
-        result = pattern.sub("[REDACTED]", result)
+        # Use a replacement function that checks allowlist
+        def replace_if_not_allowed(match: re.Match) -> str:
+            matched_text = match.group(0)
+            # Check if the matched text is in the allowlist
+            for allow_pattern in allowlist:
+                if allow_pattern.search(matched_text):
+                    return matched_text  # Keep original text
+            return "[REDACTED]"
+
+        result = pattern.sub(replace_if_not_allowed, result)
 
     return result
 
@@ -225,3 +292,11 @@ def safe_attributes(attrs: dict[str, Any]) -> dict[str, Any]:
             result[f"{key}_sanitized"] = True
 
     return result
+
+
+def reset_redaction_cache() -> None:
+    """Reset the redaction cache (useful for testing)."""
+    global _cached_patterns, _cached_allowlist, _cached_config
+    _cached_patterns = None
+    _cached_allowlist = None
+    _cached_config = None
