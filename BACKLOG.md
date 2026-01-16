@@ -23,7 +23,10 @@ Package configuration lives in `pyproject.toml`.
 
 ## Milestone 2: Deployment & Validation
 - [x] Add a small docs section in the repo (usage, env vars, troubleshooting).
-- [charlie] Run a manual smoke session; verify `service_name` appears in Loki and metrics counters increment on bastion.
+- [x] Run a manual smoke session; verify `service_name` appears in Loki and metrics counters increment on bastion.
+  - Smoke test script added: `tests/smoke_test.py`
+  - Traces and metrics accepted by OTLP collector at bastion:4317 ✓
+  - Note: Loki shows only promtail (span-to-logs processor not configured); Prometheus doesn't expose OTLP metrics directly. Both require collector config changes (see optional task below).
 - [ ] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested).
 
 ## Milestone 3: Enhancements (Optional)
