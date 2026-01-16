@@ -23,7 +23,7 @@ Package configuration lives in `pyproject.toml`.
 
 ## Milestone 2: Deployment & Validation
 - [alpha] Add a small docs section in the repo (usage, env vars, troubleshooting).
-- [ ] Run a manual smoke session; verify `service_name` appears in Loki and metrics counters increment on bastion.
+- [charlie] Run a manual smoke session; verify `service_name` appears in Loki and metrics counters increment on bastion.
 - [ ] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested).
 
 ## Milestone 3: Enhancements (Optional)
