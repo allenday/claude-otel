@@ -5,12 +5,43 @@ from unittest.mock import Mock, patch, AsyncMock, MagicMock, call
 from rich.console import Console
 import asyncio
 
-from claude_otel.sdk_runner import run_agent_interactive
+from claude_otel.sdk_runner import run_agent_interactive, get_interactive_prompt
 from claude_otel.config import OTelConfig
 
 
 class TestInteractiveMode:
     """Tests for interactive mode functionality."""
+
+    def test_get_interactive_prompt_formatting(self):
+        """Test that get_interactive_prompt formats the prompt correctly."""
+        with patch("rich.prompt.Prompt") as mock_prompt_class:
+            mock_console = Mock(spec=Console)
+            mock_prompt_class.ask = Mock(return_value="user input")
+
+            # Test turn 1
+            result = get_interactive_prompt(turn_number=1, console=mock_console)
+
+            # Verify Prompt.ask was called with correct format
+            mock_prompt_class.ask.assert_called_once()
+            call_args = mock_prompt_class.ask.call_args
+            prompt_text = call_args[0][0]
+
+            # Check that turn number is in the prompt
+            assert "Turn 1" in prompt_text or "1" in prompt_text
+            assert result == "user input"
+
+    def test_get_interactive_prompt_turn_numbers(self):
+        """Test that turn numbers increment correctly in prompts."""
+        with patch("rich.prompt.Prompt") as mock_prompt_class:
+            mock_console = Mock(spec=Console)
+            mock_prompt_class.ask = Mock(return_value="input")
+
+            # Test multiple turns
+            for turn in [1, 2, 5, 10]:
+                get_interactive_prompt(turn_number=turn, console=mock_console)
+                call_args = mock_prompt_class.ask.call_args
+                prompt_text = call_args[0][0]
+                assert str(turn) in prompt_text
 
     @pytest.fixture
     def mock_config(self):
@@ -44,7 +75,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_single_turn(self, mock_config, mock_tracer, mock_logger):
         """Test interactive mode with single turn and exit command."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console") as mock_console_class:
 
@@ -82,7 +113,7 @@ class TestInteractiveMode:
             mock_console_class.return_value = mock_console
 
             # Simulate user input: one prompt then exit
-            mock_input.side_effect = ["What is 2+2?", "exit"]
+            mock_prompt.side_effect = ["What is 2+2?", "exit"]
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -108,7 +139,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_multiple_turns(self, mock_config, mock_tracer, mock_logger):
         """Test interactive mode with multiple conversation turns."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console"):
 
@@ -151,7 +182,7 @@ class TestInteractiveMode:
             mock_setup_hooks.return_value = (mock_hooks, mock_hook_config)
 
             # Simulate user input: three prompts then quit
-            mock_input.side_effect = ["First question", "Second question", "Third question", "quit"]
+            mock_prompt.side_effect = ["First question", "Second question", "Third question", "quit"]
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -176,7 +207,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_empty_input_skipped(self, mock_config, mock_tracer, mock_logger):
         """Test that empty input is skipped in interactive mode."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console"):
 
@@ -204,7 +235,7 @@ class TestInteractiveMode:
             mock_setup_hooks.return_value = (mock_hooks, mock_hook_config)
 
             # Simulate input: empty strings and whitespace should be skipped
-            mock_input.side_effect = ["", "  ", "\t", "actual question", "bye"]
+            mock_prompt.side_effect = ["", "  ", "\t", "actual question", "bye"]
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -225,7 +256,7 @@ class TestInteractiveMode:
         """Test that all exit commands (exit, quit, bye) work correctly."""
         for exit_command in ["exit", "quit", "bye", "EXIT", "QUIT", "BYE"]:
             with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-                 patch("builtins.input") as mock_input, \
+                 patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
                  patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
                  patch("claude_otel.sdk_runner.Console"):
 
@@ -245,7 +276,7 @@ class TestInteractiveMode:
                 mock_setup_hooks.return_value = (mock_hooks, mock_hook_config)
 
                 # Simulate exit command
-                mock_input.side_effect = [exit_command]
+                mock_prompt.side_effect = [exit_command]
 
                 # Run interactive mode
                 exit_code = await run_agent_interactive(
@@ -265,7 +296,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_keyboard_interrupt_single(self, mock_config, mock_tracer, mock_logger):
         """Test single Ctrl+C shows warning and continues."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console") as mock_console_class:
 
@@ -297,7 +328,7 @@ class TestInteractiveMode:
             mock_console_class.return_value = mock_console
 
             # Simulate: Ctrl+C, then normal exit
-            mock_input.side_effect = [KeyboardInterrupt(), "exit"]
+            mock_prompt.side_effect = [KeyboardInterrupt(), "exit"]
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -320,7 +351,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_keyboard_interrupt_double(self, mock_config, mock_tracer, mock_logger):
         """Test double Ctrl+C exits immediately."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console") as mock_console_class:
 
@@ -344,7 +375,7 @@ class TestInteractiveMode:
             mock_console_class.return_value = mock_console
 
             # Simulate: two consecutive Ctrl+C
-            mock_input.side_effect = [KeyboardInterrupt(), KeyboardInterrupt()]
+            mock_prompt.side_effect = [KeyboardInterrupt(), KeyboardInterrupt()]
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -364,7 +395,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_eof_handling(self, mock_config, mock_tracer, mock_logger):
         """Test EOF (piped input) handling."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console") as mock_console_class:
 
@@ -388,7 +419,7 @@ class TestInteractiveMode:
             mock_console_class.return_value = mock_console
 
             # Simulate EOF
-            mock_input.side_effect = EOFError()
+            mock_prompt.side_effect = EOFError()
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -410,7 +441,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_error_continues_session(self, mock_config, mock_tracer, mock_logger):
         """Test that errors during query don't exit the session."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console") as mock_console_class:
 
@@ -451,7 +482,7 @@ class TestInteractiveMode:
             mock_console_class.return_value = mock_console
 
             # Simulate: query with error, then successful query, then exit
-            mock_input.side_effect = ["query 1", "query 2", "exit"]
+            mock_prompt.side_effect = ["query 1", "query 2", "exit"]
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -477,7 +508,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_session_metrics_tracking(self, mock_config, mock_tracer, mock_logger):
         """Test that session metrics are tracked and displayed."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console") as mock_console_class:
 
@@ -514,7 +545,7 @@ class TestInteractiveMode:
             mock_console_class.return_value = mock_console
 
             # Simulate: two prompts then exit
-            mock_input.side_effect = ["prompt 1", "prompt 2", "exit"]
+            mock_prompt.side_effect = ["prompt 1", "prompt 2", "exit"]
 
             # Run interactive mode
             exit_code = await run_agent_interactive(
@@ -541,7 +572,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_with_extra_args(self, mock_config, mock_tracer, mock_logger):
         """Test interactive mode properly passes extra_args to SDK."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console"), \
              patch("claude_otel.sdk_runner.ClaudeAgentOptions") as mock_options_class:
@@ -574,7 +605,7 @@ class TestInteractiveMode:
             mock_options_class.return_value = mock_options
 
             # Simulate: one prompt then exit
-            mock_input.side_effect = ["test", "exit"]
+            mock_prompt.side_effect = ["test", "exit"]
 
             # Run interactive mode with extra args
             extra_args = {
@@ -600,7 +631,7 @@ class TestInteractiveMode:
     async def test_interactive_mode_keyboard_interrupt_from_outside(self, mock_config, mock_tracer, mock_logger):
         """Test KeyboardInterrupt raised from outside the loop (immediate exit)."""
         with patch("claude_otel.sdk_runner.ClaudeSDKClient") as mock_client_class, \
-             patch("builtins.input") as mock_input, \
+             patch("claude_otel.sdk_runner.get_interactive_prompt") as mock_prompt, \
              patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup_hooks, \
              patch("claude_otel.sdk_runner.Console") as mock_console_class:
 

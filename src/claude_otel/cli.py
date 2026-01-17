@@ -85,6 +85,7 @@ def show_startup_banner(extra_args: dict[str, str | None] | None = None) -> None
 
     banner_lines.extend([
         "",
+        "[dim]Each prompt shows the turn number for context[/dim]",
         "[dim]Type 'exit', 'quit', or 'bye' to end the session[/dim]",
         "[dim]Press Ctrl+C twice to exit immediately[/dim]",
     ])

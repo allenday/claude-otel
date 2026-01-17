@@ -193,6 +193,28 @@ def extract_message_text(message) -> str:
         return str(content)
 
 
+def get_interactive_prompt(turn_number: int, console: Console) -> str:
+    """Get user input with a styled prompt showing context.
+
+    Args:
+        turn_number: Current turn number (1-indexed)
+        console: Rich console for styled output
+
+    Returns:
+        User input string
+    """
+    from rich.prompt import Prompt
+
+    # Show waiting indicator with turn context
+    prompt_text = f"[bold cyan]Turn {turn_number}[/bold cyan] [dim]›[/dim]"
+
+    try:
+        return Prompt.ask(prompt_text, console=console)
+    except (EOFError, KeyboardInterrupt):
+        # Re-raise these for proper handling
+        raise
+
+
 async def run_agent_interactive(
     extra_args: Optional[dict[str, Optional[str]]] = None,
     config: Optional[OTelConfig] = None,
@@ -299,8 +321,12 @@ async def run_agent_interactive(
                                 },
                             )
 
-                    # Get user input
-                    user_input = input("\n> ")
+                    # Get user input with styled prompt
+                    console.print()  # Empty line before prompt
+                    user_input = get_interactive_prompt(
+                        turn_number=session_metrics["prompts_count"] + 1,
+                        console=console,
+                    )
                     ctrl_c_count = 0  # Reset on successful input
 
                     # Check for exit commands
@@ -312,12 +338,14 @@ async def run_agent_interactive(
                     if not user_input.strip():
                         continue
 
+                    # Show processing indicator
+                    console.print("\n[dim]Processing...[/dim]")
+
                     # Send the query
                     await client.query(prompt=user_input)
                     session_metrics["prompts_count"] += 1
 
                     # Receive and process responses
-                    console.print()  # Empty line for spacing
                     response_text = ""
                     async for message in client.receive_response():
                         # Extract and accumulate text content
