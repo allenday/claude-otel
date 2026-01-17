@@ -238,7 +238,7 @@ options = ClaudeAgentOptions(
 - [x] Fix interactive mode output formatting to match claude_telemetry (accumulate response, display in Panel)
 
 ## Telemetry Enhancements
-- [ ] Add session duration tracking
+- [bravo] Add session duration tracking
   - Record session start/end times
   - Add session.duration_ms span attribute
   - Log session duration on completion
