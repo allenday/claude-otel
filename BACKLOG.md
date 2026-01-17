@@ -261,3 +261,6 @@ options = ClaudeAgentOptions(
   - Include tool.name, duration, exit_code, tokens, and other tool metadata
   - Currently tool names aren't in any logs (SDK only logs session summary)
   - Needed for charting tools per session in Loki/Grafana
+- [charlie] Fix failing test: test_sdk_runner_creates_spans
+  - Test expects setup_sdk_hooks to be called with (tracer) but it's called with (tracer, None)
+  - Update test mock assertion to match actual function signature
