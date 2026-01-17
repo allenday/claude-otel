@@ -188,7 +188,7 @@ options = ClaudeAgentOptions(
   - [ ] Support exit commands (exit, quit, bye) and Ctrl+C handling
 
 #### Phase 3: Enhanced Observability
-- [ ] Add rich console output (like claude_telemetry)
+- [bravo] Add rich console output (like claude_telemetry)
   - [ ] Emoji indicators (🤖, 🔧, ✅, ❌, 🎉)
   - [ ] Smart truncation for tool inputs/outputs
   - [ ] Formatted panels for responses (Rich library)
