@@ -205,6 +205,7 @@ options = ClaudeAgentOptions(
   - [x] Turn tracking tests
   - [x] Interactive mode tests
   - [x] SDK runner integration tests
+- [charlie] Fix failing wrapper tests (run_claude signature change)
 - [x] Update documentation
   - [x] Document new metrics (gen_ai.*, turns, model)
   - [x] Document CLI flags and interactive mode
