@@ -202,7 +202,7 @@ options = ClaudeAgentOptions(
 - [ ] Add tests for new features
   - [x] SDK hook tests (UserPromptSubmit, MessageComplete, PreCompact)
   - [x] CLI arg parsing tests
-  - [ ] Turn tracking tests
+  - [charlie] Turn tracking tests
   - [ ] Interactive mode tests
 - [ ] Update documentation
   - [ ] Document new metrics (gen_ai.*, turns, model)
