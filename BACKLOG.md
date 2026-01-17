@@ -147,7 +147,7 @@ options = ClaudeAgentOptions(
 - [ ] Add SDK-based hooks alongside CLI hooks for richer telemetry
   - [bravo] Implement UserPromptSubmit hook to capture prompt and model
   - [charlie] Implement MessageComplete hook for turn tracking and usage
-  - [ ] Implement PreCompact hook for context window tracking
+  - [alpha] Implement PreCompact hook for context window tracking
   - [ ] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
 - [ ] Add turn/conversation tracking to spans
   - [ ] Track turn count per session
