@@ -568,3 +568,456 @@ class TestEnhancedToolSpanAttributes:
         if not is_error:
             is_error = any(pattern in lower_response[:200] for pattern in ["error:", "exception:", "failed:", "fatal:"])
         assert is_error is False
+
+
+# ============================================================================
+# SDK Hook Tests
+# ============================================================================
+
+from unittest.mock import MagicMock, patch
+from claude_otel.sdk_hooks import SDKTelemetryHooks
+
+
+class TestSDKUserPromptSubmit:
+    """Tests for SDK UserPromptSubmit hook."""
+
+    @pytest.mark.asyncio
+    async def test_user_prompt_submit_creates_session_span(self):
+        """Should create session span with prompt and model attributes."""
+        # Create mock tracer
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+
+        # Call hook
+        input_data = {
+            "prompt": "Hello, Claude!",
+            "session_id": "sess_123",
+        }
+        ctx = {
+            "options": {
+                "model": "claude-sonnet-4-5",
+            }
+        }
+
+        result = await hooks.on_user_prompt_submit(input_data, None, ctx)
+
+        # Verify span was created
+        assert mock_tracer.start_span.called
+        call_args = mock_tracer.start_span.call_args
+        assert "Hello, Claude!" in call_args[0][0]  # Span name
+
+        # Verify attributes
+        attrs = call_args[1]["attributes"]
+        assert attrs["prompt"] == "Hello, Claude!"
+        assert attrs["model"] == "claude-sonnet-4-5"
+        assert attrs["session.id"] == "sess_123"
+        assert attrs["gen_ai.system"] == "anthropic"
+        assert attrs["gen_ai.request.model"] == "claude-sonnet-4-5"
+
+        # Verify event added
+        assert mock_span.add_event.called
+        assert mock_span.add_event.call_args[0][0] == "user.prompt.submitted"
+
+        # Verify metrics updated
+        assert hooks.metrics["prompt"] == "Hello, Claude!"
+        assert hooks.metrics["model"] == "claude-sonnet-4-5"
+        assert hooks.metrics["turns"] == 0
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_user_prompt_submit_truncates_long_prompt(self):
+        """Should truncate long prompts in span attributes."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+
+        # Long prompt
+        long_prompt = "A" * 2000
+        input_data = {
+            "prompt": long_prompt,
+            "session_id": "sess_123",
+        }
+        ctx = {"options": {"model": "opus"}}
+
+        await hooks.on_user_prompt_submit(input_data, None, ctx)
+
+        # Verify prompt truncated to 1000 chars in attributes
+        attrs = mock_tracer.start_span.call_args[1]["attributes"]
+        assert len(attrs["prompt"]) == 1000
+
+        # But full prompt in metrics
+        assert len(hooks.metrics["prompt"]) == 2000
+
+    @pytest.mark.asyncio
+    async def test_user_prompt_submit_handles_object_context(self):
+        """Should extract model from object-based context."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+
+        # Object-based context
+        ctx = MagicMock()
+        ctx.options.model = "claude-opus-4-5"
+
+        input_data = {"prompt": "Test", "session_id": "s1"}
+        await hooks.on_user_prompt_submit(input_data, None, ctx)
+
+        # Verify model extracted
+        attrs = mock_tracer.start_span.call_args[1]["attributes"]
+        assert attrs["model"] == "claude-opus-4-5"
+
+
+class TestSDKMessageComplete:
+    """Tests for SDK MessageComplete hook."""
+
+    @pytest.mark.asyncio
+    async def test_message_complete_updates_token_metrics(self):
+        """Should update cumulative token counts and turn count."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+
+        # Initialize session
+        input_data = {"prompt": "Test", "session_id": "s1"}
+        ctx = {"options": {"model": "sonnet"}}
+        await hooks.on_user_prompt_submit(input_data, None, ctx)
+
+        # Create mock message with usage
+        message = MagicMock()
+        message.usage.input_tokens = 100
+        message.usage.output_tokens = 50
+        message.usage.cache_read_input_tokens = 200
+        message.usage.cache_creation_input_tokens = 25
+
+        # Call hook
+        result = await hooks.on_message_complete(message, ctx)
+
+        # Verify metrics updated
+        assert hooks.metrics["input_tokens"] == 100
+        assert hooks.metrics["output_tokens"] == 50
+        assert hooks.metrics["cache_read_input_tokens"] == 200
+        assert hooks.metrics["cache_creation_input_tokens"] == 25
+        assert hooks.metrics["turns"] == 1
+
+        # Verify span attributes set
+        assert mock_span.set_attribute.called
+        calls = {call[0][0]: call[0][1] for call in mock_span.set_attribute.call_args_list}
+        assert calls["gen_ai.usage.input_tokens"] == 100
+        assert calls["gen_ai.usage.output_tokens"] == 50
+        assert calls["tokens.cache_read"] == 200
+        assert calls["tokens.cache_creation"] == 25
+        assert calls["turns"] == 1
+
+        # Verify turn event added
+        event_calls = [call for call in mock_span.add_event.call_args_list if call[0][0] == "turn.completed"]
+        assert len(event_calls) == 1
+        event_attrs = event_calls[0][0][1]  # Second positional arg
+        assert event_attrs["turn"] == 1
+        assert event_attrs["input_tokens"] == 100
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_message_complete_accumulates_tokens(self):
+        """Should accumulate tokens across multiple turns."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "Test", "session_id": "s1"},
+            None,
+            {"options": {"model": "sonnet"}},
+        )
+
+        # First message
+        message1 = MagicMock()
+        message1.usage.input_tokens = 100
+        message1.usage.output_tokens = 50
+        message1.usage.cache_read_input_tokens = 0
+        message1.usage.cache_creation_input_tokens = 0
+        await hooks.on_message_complete(message1, {})
+
+        # Second message
+        message2 = MagicMock()
+        message2.usage.input_tokens = 80
+        message2.usage.output_tokens = 40
+        message2.usage.cache_read_input_tokens = 100
+        message2.usage.cache_creation_input_tokens = 10
+        await hooks.on_message_complete(message2, {})
+
+        # Verify cumulative totals
+        assert hooks.metrics["input_tokens"] == 180
+        assert hooks.metrics["output_tokens"] == 90
+        assert hooks.metrics["cache_read_input_tokens"] == 100
+        assert hooks.metrics["cache_creation_input_tokens"] == 10
+        assert hooks.metrics["turns"] == 2
+
+    @pytest.mark.asyncio
+    async def test_message_complete_handles_missing_usage(self):
+        """Should handle messages without usage attribute gracefully."""
+        mock_tracer = MagicMock()
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+
+        # Message without usage
+        message = MagicMock(spec=[])  # No attributes
+        result = await hooks.on_message_complete(message, {})
+
+        # Should not crash
+        assert result == {}
+        assert hooks.metrics["input_tokens"] == 0
+
+
+class TestSDKPreCompact:
+    """Tests for SDK PreCompact hook."""
+
+    @pytest.mark.asyncio
+    async def test_pre_compact_adds_event(self):
+        """Should add compaction event to session span."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "Test", "session_id": "s1"},
+            None,
+            {"options": {"model": "sonnet"}},
+        )
+
+        # Call pre_compact hook
+        input_data = {
+            "trigger": "max_tokens_reached",
+            "custom_instructions": "Keep important context",
+        }
+        result = await hooks.on_pre_compact(input_data, None, {})
+
+        # Verify event added
+        event_calls = [call for call in mock_span.add_event.call_args_list if call[0][0] == "context.compaction"]
+        assert len(event_calls) == 1
+        event_attrs = event_calls[0][0][1]  # Second positional arg
+        assert event_attrs["trigger"] == "max_tokens_reached"
+        assert event_attrs["has_custom_instructions"] is True
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_pre_compact_without_custom_instructions(self):
+        """Should handle compaction without custom instructions."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer)
+        await hooks.on_user_prompt_submit(
+            {"prompt": "Test", "session_id": "s1"},
+            None,
+            {"options": {"model": "sonnet"}},
+        )
+
+        input_data = {"trigger": "user_requested"}
+        await hooks.on_pre_compact(input_data, None, {})
+
+        # Verify event
+        event_calls = [call for call in mock_span.add_event.call_args_list if call[0][0] == "context.compaction"]
+        event_attrs = event_calls[0][0][1]  # Second positional arg
+        assert event_attrs["has_custom_instructions"] is False
+
+
+class TestSDKToolHooks:
+    """Tests for SDK PreToolUse and PostToolUse hooks."""
+
+    @pytest.mark.asyncio
+    async def test_pre_tool_use_creates_tool_span(self):
+        """Should create child span for tool execution."""
+        mock_tracer = MagicMock()
+        mock_session_span = MagicMock()
+        mock_tool_span = MagicMock()
+        mock_tracer.start_span.side_effect = [mock_session_span, mock_tool_span]
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer, create_tool_spans=True)
+
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "Test", "session_id": "s1"},
+            None,
+            {"options": {"model": "sonnet"}},
+        )
+
+        # Call pre_tool_use
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls -la"},
+        }
+        result = await hooks.on_pre_tool_use(input_data, "tool_123", {})
+
+        # Verify tool span created
+        assert mock_tracer.start_span.call_count == 2
+        tool_span_call = mock_tracer.start_span.call_args_list[1]
+        assert tool_span_call[0][0] == "tool.Bash"
+        assert tool_span_call[1]["attributes"]["tool.name"] == "Bash"
+        assert tool_span_call[1]["attributes"]["gen_ai.operation.name"] == "execute_tool"
+
+        # Verify tool span stored
+        assert "tool_123" in hooks.tool_spans
+        assert hooks.metrics["tools_used"] == 1
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_post_tool_use_closes_tool_span(self):
+        """Should close tool span and add response attributes."""
+        mock_tracer = MagicMock()
+        mock_session_span = MagicMock()
+        mock_tool_span = MagicMock()
+        mock_tracer.start_span.side_effect = [mock_session_span, mock_tool_span]
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer, create_tool_spans=True)
+
+        # Initialize session and tool
+        await hooks.on_user_prompt_submit(
+            {"prompt": "Test", "session_id": "s1"},
+            None,
+            {"options": {"model": "sonnet"}},
+        )
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Bash", "tool_input": {"command": "ls"}},
+            "tool_123",
+            {},
+        )
+
+        # Call post_tool_use
+        input_data = {
+            "tool_name": "Bash",
+            "tool_response": {"output": "file1.txt\nfile2.txt"},
+        }
+        result = await hooks.on_post_tool_use(input_data, "tool_123", {})
+
+        # Verify response attribute set
+        assert mock_tool_span.set_attribute.called
+        calls = {call[0][0]: call[0][1] for call in mock_tool_span.set_attribute.call_args_list}
+        assert "tool.response" in calls
+        assert calls["tool.status"] == "success"
+
+        # Verify span ended
+        assert mock_tool_span.end.called
+
+        # Verify span removed from storage
+        assert "tool_123" not in hooks.tool_spans
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_post_tool_use_handles_error_response(self):
+        """Should mark span as error when tool fails."""
+        mock_tracer = MagicMock()
+        mock_session_span = MagicMock()
+        mock_tool_span = MagicMock()
+        mock_tracer.start_span.side_effect = [mock_session_span, mock_tool_span]
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer, create_tool_spans=True)
+
+        await hooks.on_user_prompt_submit(
+            {"prompt": "Test", "session_id": "s1"},
+            None,
+            {"options": {"model": "sonnet"}},
+        )
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Bash", "tool_input": {"command": "invalid"}},
+            "tool_123",
+            {},
+        )
+
+        # Error response
+        input_data = {
+            "tool_name": "Bash",
+            "tool_response": {"error": "Command not found", "isError": True},
+        }
+        await hooks.on_post_tool_use(input_data, "tool_123", {})
+
+        # Verify error attributes
+        calls = {call[0][0]: call[0][1] for call in mock_tool_span.set_attribute.call_args_list}
+        assert calls["tool.status"] == "error"
+        assert calls["tool.error"] == "Command not found"
+
+        # Verify span status set to error
+        assert mock_tool_span.set_status.called
+
+    @pytest.mark.asyncio
+    async def test_pre_tool_use_without_spans(self):
+        """Should add event to session span when create_tool_spans=False."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        hooks = SDKTelemetryHooks(tracer=mock_tracer, create_tool_spans=False)
+
+        await hooks.on_user_prompt_submit(
+            {"prompt": "Test", "session_id": "s1"},
+            None,
+            {"options": {"model": "sonnet"}},
+        )
+
+        input_data = {"tool_name": "Read", "tool_input": {"file": "test.py"}}
+        await hooks.on_pre_tool_use(input_data, "tool_123", {})
+
+        # Should only create session span, not tool span
+        assert mock_tracer.start_span.call_count == 1
+
+        # Should add event to session span
+        event_calls = [call[0][0] for call in mock_span.add_event.call_args_list]
+        assert any("tool.started: Read" in call for call in event_calls)
+
+
+class TestSDKSessionCompletion:
+    """Tests for SDK session completion and cleanup."""
+
+    def test_complete_session_ends_span_and_flushes(self):
+        """Should end session span and flush telemetry."""
+        mock_tracer = MagicMock()
+        mock_span = MagicMock()
+        mock_tracer.start_span.return_value = mock_span
+
+        # Mock tracer provider
+        mock_provider = MagicMock()
+        with patch("claude_otel.sdk_hooks.trace.get_tracer_provider", return_value=mock_provider):
+            hooks = SDKTelemetryHooks(tracer=mock_tracer)
+            hooks.session_span = mock_span
+            hooks.metrics = {
+                "model": "sonnet",
+                "tools_used": 3,
+                "start_time": 0.0,
+            }
+            hooks.tools_used = ["Bash", "Read", "Bash"]
+
+            hooks.complete_session()
+
+            # Verify final attributes set
+            calls = {call[0][0]: call[0][1] for call in mock_span.set_attribute.call_args_list}
+            assert calls["gen_ai.response.model"] == "sonnet"
+            assert calls["tools_used"] == 3
+            assert calls["tool_names"] == "Bash,Read"
+
+            # Verify event and span end
+            event_calls = [call[0][0] for call in mock_span.add_event.call_args_list]
+            assert "session.completed" in event_calls
+            assert mock_span.end.called
+
+            # Verify flush called
+            assert mock_provider.force_flush.called
+
+            # Verify state reset
+            assert hooks.session_span is None
+            assert len(hooks.tool_spans) == 0

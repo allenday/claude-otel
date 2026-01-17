@@ -205,7 +205,7 @@ options = ClaudeAgentOptions(
 
 #### Phase 4: Testing & Documentation
 - [ ] Add tests for new features
-  - [charlie] SDK hook tests (UserPromptSubmit, MessageComplete, PreCompact)
+  - [x] SDK hook tests (UserPromptSubmit, MessageComplete, PreCompact)
   - [ ] CLI arg parsing tests
   - [ ] Turn tracking tests
   - [ ] Interactive mode tests
