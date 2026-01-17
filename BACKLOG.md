@@ -145,28 +145,26 @@ options = ClaudeAgentOptions(
 
 #### Phase 1: SDK Integration & Hook Enhancement
 
-**Note:** MessageComplete, UserPromptSubmit, and PreCompact hooks require SDK integration (not available in CLI hook mode). Breaking down into prerequisite tasks:
+**Note:** SDK-based hooks implemented in `src/claude_otel/sdk_hooks.py`. SDK runner integration pending in Phase 2.
 
+- [x] Add `claude-agent-sdk` dependency to pyproject.toml
+- [x] Add SDK-based hooks alongside CLI hooks for richer telemetry
+  - [x] Implement UserPromptSubmit hook to capture prompt and model
+  - [x] Implement MessageComplete hook for turn tracking and usage
+  - [x] Implement PreCompact hook for context window tracking
+  - [x] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
+- [x] MessageComplete hook features (all implemented)
+  - [x] Extract token usage from `message.usage` (input_tokens, output_tokens, cache_read, cache_creation)
+  - [x] Track turn count per session (increment on each message)
+  - [x] Update span with cumulative token usage
+  - [x] Add turn events with incremental token counts
+  - [x] Add `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` attributes
+  - [x] Store message history for session context
 - [ ] Add SDK-based runner alongside subprocess wrapper
-  - [ ] Add `claude-agent-sdk` dependency to pyproject.toml
   - [ ] Implement SDK-based runner in `src/claude_otel/sdk_runner.py`
   - [ ] Create SDK hook manager to bridge SDK callbacks to OTEL spans
   - [ ] Add `--use-sdk` flag to `claude-otel` CLI for opt-in SDK mode
   - [ ] Maintain backward compatibility with subprocess wrapper (default)
-
-- [ ] Add SDK-based hooks for richer telemetry (requires SDK runner)
-  - [bravo] Implement UserPromptSubmit hook to capture prompt and model
-  - [x] Implement MessageComplete hook scaffold (parent task - broken down into sub-tasks below)
-  - [x] Implement PreCompact hook for context window tracking
-  - [ ] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
-
-**MessageComplete Hook Sub-Tasks (spawned from parent task):**
-- [charlie] MessageComplete: Extract token usage from `message.usage` (input_tokens, output_tokens)
-- [ ] MessageComplete: Track turn count per session (increment on each message)
-- [ ] MessageComplete: Update span with cumulative token usage
-- [ ] MessageComplete: Add turn events with incremental token counts
-- [ ] MessageComplete: Add `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` attributes
-- [ ] MessageComplete: Store message history for session context
 - [ ] Enhance tool span attributes
   - [ ] Add detailed `tool.input.*` and `tool.response.*` attributes
   - [ ] Add `tool.status` attribute (success/error)
