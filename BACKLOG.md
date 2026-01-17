@@ -176,7 +176,7 @@ options = ClaudeAgentOptions(
   - [x] Implement `parse_claude_args()` to separate prompt from flags
   - [x] Support both `--flag=value` and `--flag value` formats
   - [x] Add debug mode (`--claude-otel-debug`)
-- [ ] Add interactive mode
+- [charlie] Add interactive mode
   - [ ] Implement multi-turn REPL with shared context
   - [ ] Add session metrics tracking (total tokens, tools used)
   - [ ] Show startup banner with configuration
