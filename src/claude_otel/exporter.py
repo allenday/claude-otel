@@ -3,6 +3,12 @@
 Configures OTLP exporters to send telemetry to the configured collector.
 Supports both gRPC (default, port 4317) and HTTP (port 4318) protocols.
 
+Backend Auto-Detection:
+    Automatically detects and configures specialized observability backends:
+    - Logfire: Set LOGFIRE_TOKEN to use Pydantic's LLM-optimized platform
+    - Sentry: Set SENTRY_DSN to use Sentry's AI monitoring features
+    - Standard OTLP: Default if no backend credentials are detected
+
 Environment variables:
     OTEL_EXPORTER_OTLP_ENDPOINT: Collector endpoint (default: http://localhost:4317)
     OTEL_EXPORTER_OTLP_PROTOCOL: Protocol - 'grpc' (default) or 'http/protobuf'
@@ -10,6 +16,12 @@ Environment variables:
     OTEL_RESOURCE_ATTRIBUTES: Additional resource attributes as key=value,key2=value2
     OTEL_TRACES_EXPORTER: Trace exporter type - 'otlp' (default) or 'none'
     OTEL_LOGS_EXPORTER: Logs exporter type - 'otlp' (default) or 'none'
+
+Backend-specific environment variables:
+    LOGFIRE_TOKEN: Logfire authentication token (enables Logfire backend)
+    SENTRY_DSN: Sentry project DSN (enables Sentry backend)
+    SENTRY_ENVIRONMENT: Sentry environment name (default: "production")
+    SENTRY_TRACES_SAMPLE_RATE: Trace sampling rate 0.0-1.0 (default: "1.0")
 
 Resilience configuration:
     OTEL_BSP_MAX_QUEUE_SIZE: Max queue size for batch processor (default: 2048)
@@ -172,6 +184,11 @@ def configure_exporters() -> tuple[TracerProvider, LoggerProvider]:
     Call this once at application startup to initialize telemetry.
     Uses environment variables for configuration.
 
+    Backend Auto-Detection:
+    - Logfire: If LOGFIRE_TOKEN is set, uses Logfire backend
+    - Sentry: If SENTRY_DSN is set, uses Sentry backend
+    - Standard OTLP: Otherwise, uses standard OTLP export
+
     Resilience features:
     - Bounded queues: Limits memory usage when collector is unreachable
     - Drop policy: Drops oldest spans when queue is full (non-blocking)
@@ -188,6 +205,33 @@ def configure_exporters() -> tuple[TracerProvider, LoggerProvider]:
     if _configured:
         raise RuntimeError("OTEL exporters already configured. Call shutdown_telemetry() first.")
 
+    # Try to detect and configure backend-specific adapters
+    from claude_otel.backends import detect_backend, configure_logfire, configure_sentry
+
+    backend = detect_backend()
+    service_name = os.environ.get("OTEL_SERVICE_NAME", DEFAULT_SERVICE_NAME)
+
+    if backend == "logfire":
+        try:
+            _tracer_provider = configure_logfire(service_name)
+            # Logfire handles logging internally, so we don't configure a logger provider
+            _configured = True
+            atexit.register(shutdown_telemetry)
+            return _tracer_provider, _logger_provider
+        except Exception as e:
+            logging.warning(f"Failed to configure Logfire, falling back to standard OTLP: {e}")
+
+    elif backend == "sentry":
+        try:
+            _tracer_provider = configure_sentry(service_name)
+            # Sentry handles logging internally, so we don't configure a logger provider
+            _configured = True
+            atexit.register(shutdown_telemetry)
+            return _tracer_provider, _logger_provider
+        except Exception as e:
+            logging.warning(f"Failed to configure Sentry, falling back to standard OTLP: {e}")
+
+    # Standard OTLP configuration (fallback or default)
     resource = _create_resource()
     resilience = _get_resilience_config()
 

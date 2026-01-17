@@ -193,10 +193,10 @@ options = ClaudeAgentOptions(
   - [x] Add cache hit/miss metrics
   - [x] Add model usage distribution
   - [x] Add context compaction frequency
-- [bravo] Add backend-specific adapters (optional)
-  - [bravo] Logfire adapter with LLM UI formatting
-  - [bravo] Sentry adapter with AI monitoring attributes
-  - [bravo] Auto-detection via environment variables
+- [x] Add backend-specific adapters (optional)
+  - [x] Logfire adapter with LLM UI formatting
+  - [x] Sentry adapter with AI monitoring attributes
+  - [x] Auto-detection via environment variables
 
 #### Phase 4: Testing & Documentation
 - [ ] Add tests for new features
