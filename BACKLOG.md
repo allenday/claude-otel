@@ -236,3 +236,18 @@ options = ClaudeAgentOptions(
 
 ## Post-MVP: Bug Fixes & Improvements
 - [x] Fix interactive mode output formatting to match claude_telemetry (accumulate response, display in Panel)
+
+## Telemetry Enhancements
+- [ ] Add session duration tracking
+  - Record session start/end times
+  - Add session.duration_ms span attribute
+  - Log session duration on completion
+- [ ] Add tool-call duration tracking
+  - Record tool start/end times in SDK hooks
+  - Add tool.duration_ms attribute to tool spans
+  - Include in tool metrics
+- [ ] Add interactive prompt latency tracking
+  - Track time between prompts in interactive mode
+  - Record human response time (prompt-to-prompt latency)
+  - Add prompt.latency_ms metric
+  - Useful for understanding user interaction patterns
