@@ -27,7 +27,7 @@ Package configuration lives in `pyproject.toml`.
   - Smoke test script added: `tests/smoke_test.py`
   - Traces and metrics accepted by OTLP collector at 4317 ✓
   - Note: Loki shows only promtail (span-to-logs processor not configured); Prometheus doesn't expose OTLP metrics directly. Both require collector config changes (see optional task below).
-- [charlie] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested).
+- [ ] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested). *Note: This is infrastructure work outside the codebase scope. Close as won't-do unless explicitly requested.*
 
 ## Milestone 3: Enhancements (Optional)
 - [x] Add per-tool metrics labels (tool.name) for Prometheus counters.
@@ -146,7 +146,7 @@ options = ClaudeAgentOptions(
 #### Phase 1: SDK Integration & Hook Enhancement
 - [ ] Add SDK-based hooks alongside CLI hooks for richer telemetry
   - [bravo] Implement UserPromptSubmit hook to capture prompt and model
-  - [ ] Implement MessageComplete hook for turn tracking and usage
+  - [charlie] Implement MessageComplete hook for turn tracking and usage
   - [ ] Implement PreCompact hook for context window tracking
   - [ ] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
 - [ ] Add turn/conversation tracking to spans
