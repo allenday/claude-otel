@@ -511,6 +511,321 @@ export OTEL_BSP_MAX_QUEUE_SIZE=100
 export OTEL_TRACES_EXPORTER=none
 ```
 
+### SDK Mode Issues
+
+#### "claude-agent-sdk not found"
+
+SDK mode requires the Claude Agent SDK package:
+
+```bash
+# Install from PyPI
+pip install claude-agent-sdk
+
+# Or reinstall with all dependencies
+pip install -e .
+```
+
+Verify installation:
+```bash
+python -c "import claude_agent_sdk; print('SDK installed')"
+```
+
+#### Interactive Mode Not Starting
+
+Interactive mode requires SDK mode. Ensure you're using the `--use-sdk` flag:
+
+```bash
+# Wrong - subprocess mode doesn't support interactive
+claude-otel
+# Error: "Interactive mode requires --use-sdk flag"
+
+# Correct - SDK mode with no prompt enters interactive
+claude-otel --use-sdk
+```
+
+If you see errors about missing prompts in SDK mode, ensure no extra positional arguments:
+
+```bash
+# Wrong - extra arg interpreted as prompt
+claude-otel --use-sdk some-typo
+
+# Correct - no args for interactive
+claude-otel --use-sdk
+
+# Correct - with flags but no prompt
+claude-otel --use-sdk --model=opus
+```
+
+#### SDK Mode Shows Different Token Counts Than CLI Mode
+
+This is expected behavior. The two modes measure tokens at different points:
+
+- **CLI Mode**: Reads from transcript files after execution (all API calls combined)
+- **SDK Mode**: Reads from `message.usage` per message (real-time, per-turn)
+
+Both are accurate but represent different granularities. SDK mode provides more detailed per-turn metrics, while CLI mode shows totals.
+
+To verify token counts, compare with Claude's own reporting:
+```bash
+# CLI mode
+CLAUDE_OTEL_DEBUG=1 claude-otel "test prompt"
+# Check transcript in ~/.claude/session_*/transcript.jsonl
+
+# SDK mode
+CLAUDE_OTEL_DEBUG=1 claude-otel --use-sdk "test prompt"
+# Check debug output for message.usage
+```
+
+#### Rich Console Output Not Appearing
+
+Rich console output (emoji indicators, formatted panels) requires:
+
+1. SDK mode enabled
+2. `rich` library installed
+3. Terminal with color support
+
+```bash
+# Install rich library
+pip install rich
+
+# Use SDK mode
+claude-otel --use-sdk "test"
+
+# If still not working, check terminal
+echo $TERM  # Should be xterm-256color or similar
+```
+
+To disable rich output and use plain text:
+```bash
+export NO_COLOR=1
+claude-otel --use-sdk "test"
+```
+
+### Backend-Specific Issues
+
+#### Logfire Token Set But Export Fails
+
+When using Logfire backend, ensure:
+
+1. Token is valid and has correct permissions
+2. `logfire` package is installed
+
+```bash
+# Check if logfire is installed
+pip list | grep logfire
+
+# Install if missing
+pip install logfire
+
+# Verify token (should not error)
+LOGFIRE_TOKEN="your-token" python -c "import logfire; logfire.configure(send_to_logfire=False)"
+```
+
+Common errors:
+
+**"logfire not installed"**
+```bash
+# Error appears in debug output
+❌ LOGFIRE_TOKEN set but logfire not installed!
+   Run: pip install logfire
+```
+
+**Solution**: Install the package
+```bash
+pip install logfire
+```
+
+**Token validation errors**
+```
+ERROR: Invalid Logfire token
+```
+
+**Solution**: Check token at https://logfire.pydantic.dev/settings/api-keys
+```bash
+export LOGFIRE_TOKEN="your-new-token"
+claude-otel --use-sdk --config  # Verify configuration
+```
+
+#### Sentry DSN Set But Traces Not Appearing
+
+When using Sentry backend:
+
+1. Verify DSN is correct format: `https://key@sentry.io/project-id`
+2. Ensure `sentry-sdk` is installed
+3. Check Sentry project has "AI Monitoring" enabled
+
+```bash
+# Install Sentry SDK if missing
+pip install sentry-sdk
+
+# Verify DSN format
+echo $SENTRY_DSN
+# Should match: https://<key>@<org>.sentry.io/<project>
+
+# Test connection
+SENTRY_DSN="your-dsn" python -c "import sentry_sdk; sentry_sdk.init(traces_sample_rate=1.0); print('OK')"
+```
+
+Traces appear in Sentry's "AI Monitoring" section, not the standard "Performance" section. Navigate to:
+```
+Sentry Dashboard → AI Monitoring → Traces
+```
+
+If traces still don't appear, check sampling rate:
+```bash
+export SENTRY_TRACES_SAMPLE_RATE=1.0  # Sample 100%
+CLAUDE_OTEL_DEBUG=1 claude-otel --use-sdk "test"
+```
+
+#### Backend Priority Issues
+
+If multiple backends are configured, priority is: **Logfire > Sentry > Standard OTLP**
+
+```bash
+# Both set - Logfire wins
+export LOGFIRE_TOKEN="token"
+export SENTRY_DSN="dsn"
+claude-otel --config
+# Shows: Using Logfire backend
+
+# To use Sentry instead, unset Logfire
+unset LOGFIRE_TOKEN
+```
+
+To explicitly use standard OTLP despite backend credentials:
+```bash
+# Remove backend env vars temporarily
+env -u LOGFIRE_TOKEN -u SENTRY_DSN \
+  OTEL_EXPORTER_OTLP_ENDPOINT="http://collector:4317" \
+  claude-otel "test"
+```
+
+### Argument Parsing Issues
+
+#### Flags Not Being Recognized
+
+When passing Claude CLI flags, use `--flag=value` format to avoid ambiguity:
+
+```bash
+# Wrong - space-separated can be ambiguous
+claude-otel --model opus "test"
+# May interpret "opus" as prompt
+
+# Correct - equals sign is unambiguous
+claude-otel --model=opus "test"
+
+# Also correct - boolean flags need no value
+claude-otel --bypass-permissions "test"
+```
+
+If you see unexpected behavior, enable debug mode:
+```bash
+CLAUDE_OTEL_DEBUG=1 claude-otel --model=opus "test"
+# Shows: Debug: extra_args = {'model': 'opus'}
+# Shows: Debug: prompt = 'test'
+```
+
+#### Prompt Not Being Passed to Claude
+
+The prompt must be the last non-flag argument:
+
+```bash
+# Wrong - flag after prompt
+claude-otel "my prompt" --model=opus
+# Prompt may be misinterpreted
+
+# Correct - prompt last
+claude-otel --model=opus "my prompt"
+```
+
+For complex prompts with special characters, use quotes:
+
+```bash
+# Use single quotes for prompts with double quotes
+claude-otel --model=opus 'Review code with "best practices"'
+
+# Use double quotes for prompts with single quotes
+claude-otel --model=opus "What's the status of this PR?"
+
+# Escape special characters in bash
+claude-otel --model=opus "Calculate \$PRICE * 2"
+```
+
+### Metrics Not Appearing in Prometheus
+
+Metrics export requires explicit opt-in:
+
+```bash
+# Enable metrics exporter
+export OTEL_METRICS_EXPORTER=otlp
+claude-otel "test"
+```
+
+**Note**: OTLP collector must be configured to expose metrics to Prometheus. This is an infrastructure configuration, not a client-side setting.
+
+Example collector config (not part of claude-otel):
+```yaml
+# otel-collector-config.yaml
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [prometheus]
+```
+
+Verify metrics are being sent:
+```bash
+CLAUDE_OTEL_DEBUG=1 OTEL_METRICS_EXPORTER=otlp claude-otel "test"
+# Should show: [claude-otel] Metrics: otlp
+```
+
+### Context Window / Memory Issues
+
+#### "Context limit exceeded" in Interactive Mode
+
+Interactive mode maintains conversation history. Long sessions may hit context limits:
+
+```bash
+Session: 50 turns | 180,000 tokens | 200 tools used
+# Approaching context window limit
+```
+
+The SDK automatically triggers compaction, but you can monitor via debug output:
+
+```bash
+CLAUDE_OTEL_DEBUG=1 claude-otel --use-sdk
+# Watch for: [compaction] trigger=max_tokens
+```
+
+To reduce context usage:
+1. **Exit and restart session** - Creates fresh context
+2. **Use shorter prompts** - Be concise in multi-turn sessions
+3. **Monitor session metrics** - Watch token counts after each turn
+4. **Use CLI mode for one-offs** - No persistent context
+
+#### Turn Tracking Shows Unexpected Counts
+
+Turn counts increment on each assistant response. Tool calls within a turn don't increment the counter:
+
+```
+You: "List files and find the largest"
+# Claude: Uses Bash tool twice
+# Turn count: 1 (single response, multiple tools)
+
+You: "What was that file again?"
+# Claude: Responds from memory
+# Turn count: 2 (new response)
+```
+
+Debug turn tracking:
+```bash
+CLAUDE_OTEL_DEBUG=1 claude-otel --use-sdk
+# Shows turn events: turn.completed with incremental counts
+```
+
 ## Metrics
 
 When `OTEL_METRICS_EXPORTER=otlp` is set, the following metrics are exported:
