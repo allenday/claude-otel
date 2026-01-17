@@ -346,7 +346,7 @@ def run_agent_with_sdk_sync(
     Returns:
         Exit code (0 for success, 1 for error)
     """
-    return asyncio.run(
+    result = asyncio.run(
         run_agent_with_sdk(
             prompt=prompt,
             extra_args=extra_args,
@@ -355,6 +355,17 @@ def run_agent_with_sdk_sync(
             logger=logger,
         )
     )
+
+    # Emit a session summary log so Loki can show SDK runs even if spans/logs are sampled
+    if logger:
+        logger.info(
+            "claude sdk session",
+            extra={
+                "session.prompt": (prompt[:100] + "…") if prompt and len(prompt) > 100 else (prompt or ""),
+            },
+        )
+
+    return result
 
 
 def run_agent_interactive_sync(
