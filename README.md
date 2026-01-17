@@ -964,6 +964,13 @@ SDK mode provides richer tracking with per-turn granularity via turn events.
 - Multi-turn conversations and interactive sessions
 - Detailed performance analysis
 
+**Examples:** See [`examples/`](examples/) directory for SDK usage patterns including:
+- Basic SDK usage with enhanced telemetry
+- Interactive REPL for multi-turn conversations
+- Custom metrics tracking
+- Token usage monitoring
+- Programmatic SDK integration
+
 **Comparison:**
 
 | Feature | CLI Mode | SDK Mode |
