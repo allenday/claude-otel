@@ -15,6 +15,8 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.20.0",
     "opentelemetry-exporter-otlp-proto-http>=1.20.0",
     "claude-agent-sdk",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]
-claude-otel = "claude_otel.wrapper:main"
+claude-otel = "claude_otel.cli:app"
 claude-otel-pre-tool = "claude_otel.hooks.pre_tool:main"
 claude-otel-post-tool = "claude_otel.hooks.post_tool:main"
 claude-otel-pre-compact = "claude_otel.hooks.pre_compact:main"

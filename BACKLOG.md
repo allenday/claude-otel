@@ -171,16 +171,11 @@ options = ClaudeAgentOptions(
   - [x] Improve error detection and `tool.error` messaging
 
 #### Phase 2: CLI & Args Enhancement
-- [alpha] Implement rich CLI with arg parsing (like `claudia`)
-  - [ ] Add Typer-based CLI with `--help`, `--version`, `--config` flags
-  - [ ] Implement `parse_claude_args()` to separate prompt from flags
-  - [ ] Support both `--flag=value` and `--flag value` formats
-  - [ ] Add debug mode (`--claude-otel-debug`)
-- [ ] Add SDK-based runner alongside subprocess wrapper
-  - [ ] Implement `run_agent_with_telemetry()` using claude-agent-sdk
-  - [ ] Support `extra_args` dict for CLI flags passthrough
-  - [ ] Add `ClaudeAgentOptions` configuration with setting_sources
-  - [ ] Maintain backward compatibility with subprocess wrapper
+- [x] Implement rich CLI with arg parsing (like `claudia`)
+  - [x] Add Typer-based CLI with `--help`, `--version`, `--config` flags
+  - [x] Implement `parse_claude_args()` to separate prompt from flags
+  - [x] Support both `--flag=value` and `--flag value` formats
+  - [x] Add debug mode (`--claude-otel-debug`)
 - [ ] Add interactive mode
   - [ ] Implement multi-turn REPL with shared context
   - [ ] Add session metrics tracking (total tokens, tools used)
