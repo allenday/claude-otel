@@ -336,7 +336,17 @@ async def run_agent_interactive(
         console.print(f"  Tools used: {session_metrics['total_tools_used']}")
 
         if logger:
-            logger.info("claude SDK interactive session completed")
+            logger.info(
+                "claude SDK interactive session completed",
+                extra={
+                    "tokens.input": session_metrics["total_input_tokens"],
+                    "tokens.output": session_metrics["total_output_tokens"],
+                    "tokens.cache_read": session_metrics["total_cache_read_tokens"],
+                    "tokens.cache_creation": session_metrics["total_cache_creation_tokens"],
+                    "tools.total": session_metrics["total_tools_used"],
+                    "prompts.count": session_metrics["prompts_count"],
+                },
+            )
 
         return 0
 
