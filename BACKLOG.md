@@ -165,10 +165,10 @@ options = ClaudeAgentOptions(
   - [x] Create SDK hook manager to bridge SDK callbacks to OTEL spans
   - [x] Add `--use-sdk` flag to `claude-otel` CLI for opt-in SDK mode
   - [x] Maintain backward compatibility with subprocess wrapper (default)
-- [bravo] Enhance tool span attributes
-  - [bravo] Add detailed `tool.input.*` and `tool.response.*` attributes
-  - [bravo] Add `tool.status` attribute (success/error)
-  - [bravo] Improve error detection and `tool.error` messaging
+- [x] Enhance tool span attributes
+  - [x] Add detailed `tool.input.*` and `tool.response.*` attributes
+  - [x] Add `tool.status` attribute (success/error)
+  - [x] Improve error detection and `tool.error` messaging
 
 #### Phase 2: CLI & Args Enhancement
 - [ ] Implement rich CLI with arg parsing (like `claudia`)
