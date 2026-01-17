@@ -18,6 +18,11 @@ from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
 from claude_otel.config import get_config
+from claude_otel.formatting import (
+    create_tool_title,
+    create_completion_title,
+    truncate_for_display,
+)
 
 
 class SDKTelemetryHooks:
@@ -139,8 +144,9 @@ class SDKTelemetryHooks:
         # Store message
         self.messages.append({"role": "user", "content": prompt})
 
+        # Rich console output
         if self.config.debug:
-            print(f"[claude-otel-sdk] Session span created: {prompt_preview}")
+            print(f"🤖 {prompt_preview}")
 
         return {}
 
@@ -171,6 +177,11 @@ class SDKTelemetryHooks:
         # Track usage
         self.tools_used.append(tool_name)
         self.metrics["tools_used"] += 1
+
+        # Rich console output
+        tool_title = create_tool_title(tool_name, tool_input)
+        if self.config.debug:
+            print(f"🔧 {tool_title}")
 
         if self.create_tool_spans:
             # Create child span for tool
@@ -252,6 +263,22 @@ class SDKTelemetryHooks:
             if self.config.debug:
                 print(f"[claude-otel-sdk] Warning: No span found for tool: {tool_name}")
             return {}
+
+        # Determine error status
+        has_error = False
+        if isinstance(tool_response, dict):
+            if "error" in tool_response and tool_response["error"]:
+                has_error = True
+            elif "isError" in tool_response and tool_response["isError"]:
+                has_error = True
+
+        # Rich console output
+        completion_title = create_completion_title(tool_name, tool_response)
+        if self.config.debug:
+            if has_error:
+                print(f"❌ {completion_title}")
+            else:
+                print(f"✅ {completion_title}")
 
         # Add response attributes and close span
         try:
@@ -413,7 +440,7 @@ class SDKTelemetryHooks:
         if self.config.debug:
             duration = time.time() - self.metrics["start_time"]
             print(
-                f"[claude-otel-sdk] Session completed | "
+                f"🎉 Session completed | "
                 f"{self.metrics['input_tokens']} in, "
                 f"{self.metrics['output_tokens']} out | "
                 f"{self.metrics['tools_used']} tools | "

@@ -11,6 +11,7 @@ from typing import Optional
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, HookMatcher
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
+from rich.console import Console
 
 from claude_otel.config import get_config, OTelConfig
 from claude_otel.sdk_hooks import SDKTelemetryHooks
@@ -99,6 +100,9 @@ async def run_agent_with_sdk(
         stderr=log_claude_stderr if config.debug else None,
     )
 
+    # Use Rich Console for formatted output
+    console = Console()
+
     try:
         async with ClaudeSDKClient(options=options) as client:
             # Send the query
@@ -109,7 +113,7 @@ async def run_agent_with_sdk(
                 # Extract and display text content
                 text = extract_message_text(message)
                 if text:
-                    print(text, end="", flush=True)
+                    console.print(text, end="")
 
         # Complete the session span
         if hooks.session_span:
