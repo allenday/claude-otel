@@ -24,80 +24,6 @@ claude-otel "What is 2+2?"
 
 All arguments are passed through to the underlying `claude` command. The wrapper creates an OTEL session span and exports telemetry to the configured collector.
 
-## Modes
-
-`claude-otel` supports two execution modes:
-
-### Subprocess Wrapper (Default)
-
-The default mode wraps the `claude` CLI as a subprocess and uses CLI hooks for telemetry:
-
-```bash
-claude-otel "What is 2+2?"
-```
-
-**Features:**
-- Lightweight and fast
-- No SDK dependencies at runtime
-- Basic telemetry: tool invocations, duration, token usage from transcript
-- Works with all Claude CLI versions
-
-### SDK Mode (Enhanced)
-
-Use `--use-sdk` for richer telemetry via the `claude-agent-sdk`:
-
-```bash
-claude-otel --use-sdk "Analyze this codebase"
-```
-
-**Features:**
-- Turn tracking with incremental token counts
-- Gen AI semantic conventions (gen_ai.* attributes)
-- Model metadata capture
-- Context compaction events
-- Interactive REPL mode support
-- Per-turn metrics and cumulative totals
-
-### Interactive Mode
-
-Start an interactive session with `--use-sdk` and no prompt:
-
-```bash
-claude-otel --use-sdk
-```
-
-**Features:**
-- Multi-turn conversations with shared context
-- Session metrics tracking (total tokens, tools used)
-- Rich console output with formatting
-- Exit commands: `exit`, `quit`, `bye`, or Ctrl+C
-
-## CLI Flags
-
-### claude-otel Specific Flags
-
-| Flag | Description |
-|------|-------------|
-| `--use-sdk` | Use SDK-based runner for enhanced telemetry |
-| `--claude-otel-debug` | Enable debug output |
-| `--version`, `-v` | Show version and exit |
-| `--config` | Show configuration and exit |
-
-### Claude CLI Passthrough
-
-All other flags are passed directly to Claude CLI. Use `--flag=value` format for clarity:
-
-```bash
-# Permission mode
-claude-otel --permission-mode=bypassPermissions "fix bug"
-
-# Specific model
-claude-otel --model=opus "review code"
-
-# Multiple flags
-claude-otel --model=sonnet --permission-mode=ask "analyze this"
-```
-
 ### Quick Start
 
 ```bash
@@ -224,75 +150,6 @@ claude-otel -p "hello"
 
 You should see logs in Loki under `service_name="infra/claude-otel"`. Ensure `/root/.claude/debug` (Claude CLI debug dir) is writable if running as root.
 
-### SDK Mode Examples
-
-#### Single-Turn with Enhanced Telemetry
-
-```bash
-# Use SDK mode for gen_ai.* attributes and turn tracking
-export OTEL_METRICS_EXPORTER=otlp
-claude-otel --use-sdk "Analyze the authentication flow"
-```
-
-This provides:
-- Gen AI semantic conventions (gen_ai.system, gen_ai.request.model, etc.)
-- Turn tracking and cumulative token counts
-- Enhanced tool span attributes
-- Model metadata capture
-
-#### Interactive Session
-
-```bash
-# Start interactive REPL with SDK mode
-export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
-export OTEL_METRICS_EXPORTER=otlp
-claude-otel --use-sdk
-
-# Now you can have multi-turn conversations:
-# > What files handle routing?
-# > Can you refactor the main handler?
-# > Run the tests
-# > exit
-```
-
-Interactive mode features:
-- Persistent context across turns
-- Session-level metrics (total tokens, tools used)
-- Rich console output with formatting
-- Type `exit`, `quit`, or `bye` to end session
-
-#### SDK Mode with Custom Model
-
-```bash
-# Use specific model in SDK mode
-claude-otel --use-sdk --model=opus "Review this pull request"
-
-# With permission mode
-claude-otel --use-sdk --permission-mode=bypassPermissions "Fix all linting errors"
-```
-
-#### Subprocess vs SDK Comparison
-
-```bash
-# Subprocess mode (default): lightweight, basic telemetry
-claude-otel "What is 2+2?"
-# ✓ Fast startup
-# ✓ Tool metrics: duration, exit codes, payload sizes
-# ✓ Token usage from transcript
-# ✗ No turn tracking
-# ✗ No gen_ai.* attributes
-
-# SDK mode: rich telemetry
-claude-otel --use-sdk "What is 2+2?"
-# ✓ All subprocess mode features
-# ✓ Turn tracking (turns counter)
-# ✓ Gen AI semantic conventions
-# ✓ Model metadata (gen_ai.request.model, gen_ai.response.model)
-# ✓ Context compaction events
-# ✓ Interactive mode support
-# ✗ Slightly slower startup (SDK initialization)
-```
-
 ## Troubleshooting
 
 ### "claude command not found"
@@ -413,133 +270,93 @@ export OTEL_BSP_MAX_QUEUE_SIZE=100
 export OTEL_TRACES_EXPORTER=none
 ```
 
-### SDK Mode Issues
-
-#### "Interactive mode requires --use-sdk flag"
-
-Interactive mode (running without a prompt) requires SDK mode:
-
-```bash
-# Wrong: subprocess mode doesn't support interactive
-claude-otel
-# Error: Interactive mode requires --use-sdk flag
-
-# Correct: use --use-sdk for interactive sessions
-claude-otel --use-sdk
-```
-
-#### SDK Import Errors
-
-If you get import errors for `claude_agent_sdk`:
-
-```bash
-# Ensure SDK is installed
-pip install claude-agent-sdk
-
-# Or reinstall the package with SDK extras
-pip install -e ".[sdk]"
-```
-
-#### Missing gen_ai.* Attributes
-
-Gen AI semantic convention attributes are only available in SDK mode:
-
-```bash
-# Subprocess mode: only basic attributes
-claude-otel "test"
-# Has: tokens.*, tool.*, session.id
-# Missing: gen_ai.*, turns
-
-# SDK mode: includes gen_ai.* attributes
-claude-otel --use-sdk "test"
-# Has: All above + gen_ai.system, gen_ai.request.model, turns
-```
-
-#### Interactive Mode Not Responding
-
-If interactive mode hangs or doesn't respond:
-
-1. Check that Claude CLI is working:
-   ```bash
-   claude "test prompt"
-   ```
-
-2. Enable debug mode to see what's happening:
-   ```bash
-   claude-otel --use-sdk --claude-otel-debug
-   ```
-
-3. Try subprocess mode to isolate the issue:
-   ```bash
-   claude-otel "test prompt"
-   ```
-
-#### Turn Count Not Incrementing
-
-Turn counting is only available in SDK mode via the MessageComplete hook:
-
-```bash
-# Enable metrics export to see turn counter
-export OTEL_METRICS_EXPORTER=otlp
-claude-otel --use-sdk "first prompt"
-
-# Check collector/Prometheus for claude.turns_total metric
-```
-
 ## Metrics
 
 When `OTEL_METRICS_EXPORTER=otlp` is set, the following metrics are exported:
 
-### Basic Metrics (All Modes)
+### Tool Metrics
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `claude.tool_calls_total` | Counter | `tool.name` | Total tool invocations |
 | `claude.tool_calls_errors_total` | Counter | `tool.name` | Tool call errors |
-| `claude.tool_call_duration_ms` | Histogram | `tool.name` | Tool call duration |
+| `claude.tool_call_duration_ms` | Histogram | `tool.name` | Tool call duration in milliseconds |
 
-### SDK Mode Enhanced Metrics
-
-When using `--use-sdk` mode, additional metrics are available:
+### Conversation Metrics
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `claude.turns_total` | Counter | `model` | Total conversation turns |
-| `claude.cache_hits_total` | Counter | `model` | Cache read operations |
-| `claude.cache_creates_total` | Counter | `model` | Cache creation operations |
-| `claude.compaction_total` | Counter | - | Context window compaction events |
+| `claude.turns_total` | Counter | `model` | Total conversation turns completed |
+| `claude.model_requests_total` | Counter | `model` | Total API requests by model type |
+
+### Cache Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `claude.cache_hits_total` | Counter | `model` | Cache hits (cache_read_input_tokens > 0) |
+| `claude.cache_misses_total` | Counter | `model` | Cache misses (cache_read_input_tokens == 0) |
+| `claude.cache_creations_total` | Counter | `model` | Cache creations (cache_creation_input_tokens > 0) |
+
+### Context Management Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `claude.context_compactions_total` | Counter | `trigger`, `model` | Context compaction events with trigger reason |
+
+## Semantic Conventions
+
+This wrapper follows [OpenTelemetry Semantic Conventions for Generative AI](https://opentelemetry.io/docs/specs/semconv/gen-ai/) to ensure compatibility with LLM observability tools.
+
+### gen_ai.* Attributes (SDK Mode)
+
+When using SDK-based hooks (`--use-sdk` flag), the following semantic convention attributes are included:
+
+| Attribute | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `gen_ai.system` | string | `anthropic` | The AI system/provider |
+| `gen_ai.request.model` | string | `claude-sonnet-4` | Model requested |
+| `gen_ai.response.model` | string | `claude-sonnet-4` | Model that responded |
+| `gen_ai.operation.name` | string | `execute_tool` | Operation type |
+| `gen_ai.usage.input_tokens` | int | `1234` | Cumulative input tokens for session |
+| `gen_ai.usage.output_tokens` | int | `567` | Cumulative output tokens for session |
+
+### Session & Turn Tracking (SDK Mode)
+
+SDK-based hooks provide rich conversation tracking:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `model` | string | Model name (e.g., `claude-sonnet-4`) |
+| `prompt` | string | Initial user prompt (truncated to 1000 chars) |
+| `session.id` | string | Unique Claude session identifier |
+| `turns` | int | Total conversation turns in this session |
+| `tools_used` | int | Number of tools invoked |
+| `tool_names` | string | Comma-separated list of unique tools used |
+
+**Turn Events:** Each completed turn adds a `turn.completed` event with incremental token counts for that specific turn.
 
 ## Token Usage Tracking
 
-### Basic Mode (Subprocess Wrapper)
+Token usage attributes are available in both CLI and SDK modes:
 
-Tool spans include token usage attributes when available from the Claude transcript:
+### Cumulative Token Attributes (Session Span)
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `tokens.input` | int | Input tokens for the API call |
-| `tokens.output` | int | Output tokens generated |
-| `tokens.cache_read` | int | Tokens read from cache |
-| `tokens.cache_creation` | int | Tokens used for cache creation |
+| `gen_ai.usage.input_tokens` | int | Total input tokens for the session |
+| `gen_ai.usage.output_tokens` | int | Total output tokens for the session |
+| `tokens.cache_read` | int | Total tokens read from cache |
+| `tokens.cache_creation` | int | Total tokens used for cache creation |
+| `tokens.input` | int | Legacy attribute (same as gen_ai.usage.input_tokens) |
+| `tokens.output` | int | Legacy attribute (same as gen_ai.usage.output_tokens) |
 | `tokens.total` | int | Sum of all token counts |
 
-Token usage is extracted from the Claude CLI transcript file which contains detailed usage metrics per API call.
+### Token Sources
 
-### SDK Mode Enhanced Tracking
+- **CLI Mode:** Extracted from Claude CLI transcript file (per-API-call usage)
+- **SDK Mode:** Extracted from `message.usage` object (per-turn usage with cumulative totals)
 
-When using `--use-sdk`, additional semantic convention attributes are available following the OpenTelemetry Gen AI specification:
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `gen_ai.system` | string | AI system (always "anthropic") |
-| `gen_ai.request.model` | string | Model requested (e.g., "claude-sonnet-4") |
-| `gen_ai.response.model` | string | Model used for response |
-| `gen_ai.operation.name` | string | Operation type (e.g., "chat") |
-| `gen_ai.usage.input_tokens` | int | Input tokens consumed |
-| `gen_ai.usage.output_tokens` | int | Output tokens generated |
-| `turns` | int | Conversation turn count |
-
-The SDK mode also provides per-turn token tracking with cumulative totals updated after each message.
+SDK mode provides richer tracking with per-turn granularity via turn events.
 
 ## Architecture
 
@@ -553,6 +370,57 @@ The SDK mode also provides per-turn token tracking with cumulative totals update
        └────────────────────────────────────────┘
        (traces, logs, metrics)
 ```
+
+### CLI Mode vs SDK Mode
+
+`claude-otel` supports two execution modes with different telemetry capabilities:
+
+#### CLI Mode (Default)
+
+**Usage:** `claude-otel "your prompt"`
+
+- Wraps the Claude CLI as a subprocess
+- Uses CLI hooks (PreToolUse, PostToolUse, PreCompact) via settings.json
+- Lightweight and simple
+- Token usage extracted from transcript files
+- Basic session span with tool invocations
+
+**Best for:**
+- Quick setup and simple use cases
+- Drop-in replacement for `claude` command
+- Minimal dependencies
+
+#### SDK Mode (Enhanced Telemetry)
+
+**Usage:** `claude-otel --use-sdk "your prompt"`
+
+- Uses `claude-agent-sdk` directly (no subprocess)
+- Uses SDK hooks (UserPromptSubmit, MessageComplete, PreToolUse, PostToolUse, PreCompact)
+- Rich semantic conventions (`gen_ai.*` attributes)
+- Turn tracking with per-turn token counts
+- Model information capture
+- Interactive mode support
+- Context compaction tracking
+
+**Best for:**
+- Production observability with full context
+- LLM-specific monitoring tools (Logfire, Sentry AI)
+- Multi-turn conversations and interactive sessions
+- Detailed performance analysis
+
+**Comparison:**
+
+| Feature | CLI Mode | SDK Mode |
+|---------|----------|----------|
+| gen_ai.* attributes | ❌ | ✅ |
+| Model tracking | ❌ | ✅ |
+| Turn tracking | ❌ | ✅ |
+| Per-turn tokens | ❌ | ✅ |
+| Interactive mode | ❌ | ✅ |
+| Prompt capture | ❌ | ✅ |
+| Tool spans | ✅ | ✅ |
+| Cache metrics | ✅ | ✅ |
+| Compaction events | ✅ | ✅ |
 
 ## Tool Hooks
 
