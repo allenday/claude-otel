@@ -174,6 +174,159 @@ def extract_message_text(message) -> str:
         return str(content)
 
 
+async def run_agent_interactive(
+    extra_args: Optional[dict[str, Optional[str]]] = None,
+    config: Optional[OTelConfig] = None,
+    tracer: Optional[trace.Tracer] = None,
+    logger: Optional[logging.Logger] = None,
+) -> int:
+    """Run Claude agent in interactive mode (multi-turn conversation).
+
+    Args:
+        extra_args: Extra arguments to pass to Claude SDK (e.g., {"model": "opus"})
+        config: Optional OTelConfig; uses get_config() if not provided
+        tracer: Optional tracer; required for telemetry
+        logger: Optional logger for OTEL logging
+
+    Returns:
+        Exit code (0 for success, 130 for Ctrl+C)
+    """
+    if extra_args is None:
+        extra_args = {}
+
+    if config is None:
+        config = get_config()
+
+    if tracer is None:
+        raise ValueError("Tracer is required for SDK runner")
+
+    # Initialize SDK hooks (shared across all turns)
+    hooks, hook_config = setup_sdk_hooks(tracer)
+
+    # Session metrics tracking
+    session_metrics = {
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        "total_cache_read_tokens": 0,
+        "total_cache_creation_tokens": 0,
+        "total_tools_used": 0,
+        "prompts_count": 0,
+    }
+
+    # Callback for stderr output from Claude CLI
+    def log_claude_stderr(line: str) -> None:
+        """Log Claude CLI stderr output for debugging."""
+        if line.strip():
+            if logger:
+                logger.info(f"[Claude CLI] {line}")
+            elif config.debug:
+                print(f"[claude-otel-sdk] {line}")
+
+    # Create agent options with hooks
+    options = ClaudeAgentOptions(
+        hooks=hook_config,
+        setting_sources=["user", "project", "local"],
+        extra_args=extra_args,
+        stderr=log_claude_stderr if config.debug else None,
+    )
+
+    # Use Rich Console for formatted output
+    console = Console()
+
+    # Ctrl+C handling
+    ctrl_c_count = 0
+
+    try:
+        # Create a single persistent client for the entire session
+        async with ClaudeSDKClient(options=options) as client:
+            # Multi-turn loop
+            while True:
+                try:
+                    # Get user input
+                    user_input = input("\n> ")
+                    ctrl_c_count = 0  # Reset on successful input
+
+                    # Check for exit commands
+                    if user_input.strip().lower() in ["exit", "quit", "bye"]:
+                        console.print("\n[dim]Goodbye![/dim]")
+                        break
+
+                    # Skip empty input
+                    if not user_input.strip():
+                        continue
+
+                    # Send the query
+                    await client.query(prompt=user_input)
+                    session_metrics["prompts_count"] += 1
+
+                    # Receive and process responses
+                    response_text = ""
+                    async for message in client.receive_response():
+                        # Extract and display text content
+                        text = extract_message_text(message)
+                        if text:
+                            console.print(text, end="")
+                            response_text += text
+
+                    # Update session metrics from hooks
+                    if hasattr(hooks, "metrics"):
+                        session_metrics["total_input_tokens"] = hooks.metrics.get("input_tokens", 0)
+                        session_metrics["total_output_tokens"] = hooks.metrics.get("output_tokens", 0)
+                        session_metrics["total_cache_read_tokens"] = hooks.metrics.get("cache_read_tokens", 0)
+                        session_metrics["total_cache_creation_tokens"] = hooks.metrics.get("cache_creation_tokens", 0)
+                        session_metrics["total_tools_used"] = len(hooks.tools_used) if hasattr(hooks, "tools_used") else 0
+
+                except KeyboardInterrupt:
+                    ctrl_c_count += 1
+                    if ctrl_c_count == 1:
+                        console.print("\n[yellow]Press Ctrl+C again to exit, or type 'exit'[/yellow]")
+                    else:
+                        console.print("\n[dim]Exiting...[/dim]")
+                        break
+
+                except EOFError:
+                    # Handle EOF (e.g., piped input)
+                    console.print("\n[dim]EOF received, exiting...[/dim]")
+                    break
+
+                except Exception as e:
+                    # Don't exit on error; continue session
+                    error_msg = str(e)
+                    console.print(f"\n[red]Error: {error_msg}[/red]")
+                    if logger:
+                        logger.error(f"Error in interactive session: {error_msg}")
+                    # Continue to next prompt
+
+        # Complete the session span
+        if hooks.session_span:
+            hooks.complete_session()
+
+        # Show session summary
+        console.print("\n[bold cyan]Session Summary[/bold cyan]")
+        console.print(f"  Prompts: {session_metrics['prompts_count']}")
+        console.print(f"  Total input tokens: {session_metrics['total_input_tokens']}")
+        console.print(f"  Total output tokens: {session_metrics['total_output_tokens']}")
+        if session_metrics['total_cache_read_tokens'] > 0:
+            console.print(f"  Cache read tokens: {session_metrics['total_cache_read_tokens']}")
+        if session_metrics['total_cache_creation_tokens'] > 0:
+            console.print(f"  Cache creation tokens: {session_metrics['total_cache_creation_tokens']}")
+        console.print(f"  Tools used: {session_metrics['total_tools_used']}")
+
+        if logger:
+            logger.info("claude SDK interactive session completed")
+
+        return 0
+
+    except KeyboardInterrupt:
+        # Final Ctrl+C to exit immediately
+        console.print("\n[dim]Interrupted[/dim]")
+        if hooks.session_span:
+            hooks.complete_session()
+        if logger:
+            logger.info("claude SDK interactive session interrupted")
+        return 130
+
+
 def run_agent_with_sdk_sync(
     prompt: str,
     extra_args: Optional[dict[str, Optional[str]]] = None,
@@ -196,6 +349,33 @@ def run_agent_with_sdk_sync(
     return asyncio.run(
         run_agent_with_sdk(
             prompt=prompt,
+            extra_args=extra_args,
+            config=config,
+            tracer=tracer,
+            logger=logger,
+        )
+    )
+
+
+def run_agent_interactive_sync(
+    extra_args: Optional[dict[str, Optional[str]]] = None,
+    config: Optional[OTelConfig] = None,
+    tracer: Optional[trace.Tracer] = None,
+    logger: Optional[logging.Logger] = None,
+) -> int:
+    """Synchronous wrapper for run_agent_interactive.
+
+    Args:
+        extra_args: Extra arguments to pass to Claude SDK (e.g., {"model": "opus"})
+        config: Optional OTelConfig; uses get_config() if not provided
+        tracer: Optional tracer; required for telemetry
+        logger: Optional logger for OTEL logging
+
+    Returns:
+        Exit code (0 for success, 130 for Ctrl+C)
+    """
+    return asyncio.run(
+        run_agent_interactive(
             extra_args=extra_args,
             config=config,
             tracer=tracer,

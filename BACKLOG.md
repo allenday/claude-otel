@@ -176,11 +176,11 @@ options = ClaudeAgentOptions(
   - [x] Implement `parse_claude_args()` to separate prompt from flags
   - [x] Support both `--flag=value` and `--flag value` formats
   - [x] Add debug mode (`--claude-otel-debug`)
-- [charlie] Add interactive mode
-  - [ ] Implement multi-turn REPL with shared context
-  - [ ] Add session metrics tracking (total tokens, tools used)
-  - [ ] Show startup banner with configuration
-  - [ ] Support exit commands (exit, quit, bye) and Ctrl+C handling
+- [x] Add interactive mode
+  - [x] Implement multi-turn REPL with shared context
+  - [x] Add session metrics tracking (total tokens, tools used)
+  - [x] Show startup banner with configuration
+  - [x] Support exit commands (exit, quit, bye) and Ctrl+C handling
 
 #### Phase 3: Enhanced Observability
 - [x] Add rich console output (like claude_telemetry)

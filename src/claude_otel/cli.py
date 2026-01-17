@@ -60,6 +60,44 @@ def show_config() -> None:
     console.print(table)
 
 
+def show_startup_banner(extra_args: dict[str, str | None] | None = None) -> None:
+    """Show startup banner for interactive mode.
+
+    Args:
+        extra_args: Extra arguments passed to Claude SDK (e.g., model, flags)
+    """
+    from rich.panel import Panel
+
+    config = get_config()
+
+    # Build banner text
+    banner_lines = [
+        "[bold cyan]Claude CLI with OpenTelemetry[/bold cyan]",
+        "",
+        f"Service: [green]{config.service_name}[/green]",
+        f"Endpoint: [green]{config.endpoint}[/green]",
+        f"Telemetry: [green]{'Enabled' if config.traces_enabled else 'Disabled'}[/green]",
+    ]
+
+    # Add model info if available
+    if extra_args and "model" in extra_args:
+        banner_lines.append(f"Model: [green]{extra_args['model']}[/green]")
+
+    banner_lines.extend([
+        "",
+        "[dim]Type 'exit', 'quit', or 'bye' to end the session[/dim]",
+        "[dim]Press Ctrl+C twice to exit immediately[/dim]",
+    ])
+
+    console.print(
+        Panel(
+            "\n".join(banner_lines),
+            title="Interactive Mode",
+            border_style="cyan",
+        )
+    )
+
+
 def parse_claude_args(
     args: list[str] | None,
 ) -> tuple[str | None, dict[str, str | None]]:
@@ -203,33 +241,69 @@ def main(
         print(f"[claude-otel] Debug: prompt = {prompt}", file=sys.stderr)
         print(f"[claude-otel] Debug: use_sdk = {use_sdk}", file=sys.stderr)
 
-    # Import wrapper main and invoke it
-    from claude_otel.wrapper import main as wrapper_main
+    # Determine if interactive mode (no prompt provided)
+    use_interactive = prompt is None
 
-    # Reconstruct args for wrapper
-    reconstructed_args = []
+    if otel_config.debug:
+        print(f"[claude-otel] Debug: use_interactive = {use_interactive}", file=sys.stderr)
 
-    # Add use-sdk flag if requested
-    if use_sdk:
-        reconstructed_args.append("--use-sdk")
+    # Interactive mode only supported with SDK
+    if use_interactive and not use_sdk:
+        console.print("[yellow]Interactive mode requires --use-sdk flag[/yellow]")
+        console.print("[dim]Usage: claude-otel --use-sdk[/dim]")
+        raise typer.Exit(1)
 
-    # Add extra args
-    for key, value in extra_args.items():
-        if value is None:
-            reconstructed_args.append(f"--{key}")
-        else:
-            reconstructed_args.append(f"--{key}={value}")
+    if use_interactive:
+        # Show startup banner
+        show_startup_banner(extra_args)
 
-    # Add prompt if present
-    if prompt:
-        reconstructed_args.append(prompt)
+        # Import SDK runner and run interactive mode
+        from claude_otel.wrapper import setup_tracing, setup_logging
+        from claude_otel.sdk_runner import run_agent_interactive_sync
 
-    # Update sys.argv for wrapper.main() to parse
-    sys.argv[1:] = reconstructed_args
+        tracer = setup_tracing(otel_config)
+        logger, logger_provider = setup_logging(otel_config)
 
-    # Call wrapper main
-    exit_code = wrapper_main()
-    raise typer.Exit(exit_code)
+        try:
+            exit_code = run_agent_interactive_sync(
+                extra_args=extra_args,
+                config=otel_config,
+                tracer=tracer,
+                logger=logger,
+            )
+            raise typer.Exit(exit_code)
+        finally:
+            if logger_provider:
+                logger_provider.shutdown()
+    else:
+        # Single-turn mode: use existing wrapper logic
+        # Import wrapper main and invoke it
+        from claude_otel.wrapper import main as wrapper_main
+
+        # Reconstruct args for wrapper
+        reconstructed_args = []
+
+        # Add use-sdk flag if requested
+        if use_sdk:
+            reconstructed_args.append("--use-sdk")
+
+        # Add extra args
+        for key, value in extra_args.items():
+            if value is None:
+                reconstructed_args.append(f"--{key}")
+            else:
+                reconstructed_args.append(f"--{key}={value}")
+
+        # Add prompt if present
+        if prompt:
+            reconstructed_args.append(prompt)
+
+        # Update sys.argv for wrapper.main() to parse
+        sys.argv[1:] = reconstructed_args
+
+        # Call wrapper main
+        exit_code = wrapper_main()
+        raise typer.Exit(exit_code)
 
 
 if __name__ == "__main__":
