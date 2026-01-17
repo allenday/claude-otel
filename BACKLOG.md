@@ -231,3 +231,8 @@ options = ClaudeAgentOptions(
 - [x] Rich console output with formatting
 - [x] Tests passing for all new features
 - [x] Documentation updated and examples provided
+
+---
+
+## Post-MVP: Bug Fixes & Improvements
+- [bravo] Fix interactive mode output formatting to match claude_telemetry (accumulate response, display in Panel)
