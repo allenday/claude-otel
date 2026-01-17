@@ -199,12 +199,12 @@ options = ClaudeAgentOptions(
   - [x] Auto-detection via environment variables
 
 #### Phase 4: Testing & Documentation
-- [alpha] Add tests for new features
+- [x] Add tests for new features
   - [x] SDK hook tests (UserPromptSubmit, MessageComplete, PreCompact)
   - [x] CLI arg parsing tests
   - [x] Turn tracking tests
   - [x] Interactive mode tests
-  - [alpha] SDK runner integration tests
+  - [x] SDK runner integration tests
 - [x] Update documentation
   - [x] Document new metrics (gen_ai.*, turns, model)
   - [x] Document CLI flags and interactive mode
