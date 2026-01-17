@@ -262,16 +262,38 @@ def main():
 
         if isinstance(tool_response, dict):
             # Check for error indicators in response
+            # Check both 'error' field and 'isError' flag (like claude_telemetry)
             if tool_response.get("error"):
                 is_error = True
                 error_message = str(tool_response.get("error", ""))[:500]
+            elif tool_response.get("isError"):
+                is_error = True
+                error_message = "Tool execution failed (isError=true)"
+
+            # Check exit code
             if "exit_code" in tool_response:
                 exit_code = tool_response["exit_code"]
                 if exit_code != 0:
                     is_error = True
+                    if not error_message:
+                        error_message = f"Tool exited with code {exit_code}"
+
+            # Check for stderr output (indicates potential error)
+            if not is_error and tool_response.get("stderr"):
+                stderr = str(tool_response.get("stderr", ""))
+                # Only treat non-empty stderr as error if it contains error keywords
+                if stderr and any(keyword in stderr.lower() for keyword in ["error", "exception", "failed", "fatal"]):
+                    is_error = True
+                    error_message = stderr[:500]
+
         elif isinstance(tool_response, str):
             # Check for error patterns in string response
-            if tool_response.startswith("Error:") or "error" in tool_response.lower()[:100]:
+            # Be more specific about error detection to avoid false positives
+            lower_response = tool_response.lower()
+            if tool_response.startswith("Error:") or tool_response.startswith("ERROR:"):
+                is_error = True
+                error_message = tool_response[:500]
+            elif any(pattern in lower_response[:200] for pattern in ["error:", "exception:", "failed:", "fatal:"]):
                 is_error = True
                 error_message = tool_response[:500]
 
@@ -290,15 +312,59 @@ def main():
             span.set_attribute("input.summary", input_summary_truncated)
             span.set_attribute("input.truncated", was_input_truncated)
 
+            # Add detailed tool.input.* attributes for each input parameter
+            if isinstance(tool_input, dict):
+                for key, value in tool_input.items():
+                    value_str = str(value)
+                    # Limit attribute size (OTEL has limits around 10KB per attribute)
+                    if len(value_str) < 2000:
+                        span.set_attribute(f"tool.input.{key}", value_str)
+                    else:
+                        # Truncate large values
+                        truncated = f"{value_str[:1900]}... (truncated, full size: {len(value_str)} chars)"
+                        span.set_attribute(f"tool.input.{key}", truncated)
+
             # Output metrics
             span.set_attribute("response_bytes", response_bytes)
             span.set_attribute("response.truncated", response_bytes > DEFAULT_MAX_PAYLOAD_BYTES)
+
+            # Add detailed tool.response.* attributes for each response field
+            if isinstance(tool_response, dict):
+                for key, value in tool_response.items():
+                    value_str = str(value)
+                    # Limit attribute size
+                    if len(value_str) < 2000:
+                        span.set_attribute(f"tool.response.{key}", value_str)
+                    else:
+                        # Truncate large values
+                        truncated = f"{value_str[:1900]}... (truncated, full size: {len(value_str)} chars)"
+                        span.set_attribute(f"tool.response.{key}", truncated)
+            elif isinstance(tool_response, str):
+                # For string responses, store as tool.response
+                if len(tool_response) < 2000:
+                    span.set_attribute("tool.response", tool_response)
+                else:
+                    span.set_attribute("tool.response", tool_response[:2000] + "...")
+            elif tool_response is not None:
+                # For other types, stringify
+                response_str = str(tool_response)
+                if len(response_str) < 2000:
+                    span.set_attribute("tool.response", response_str)
+                else:
+                    span.set_attribute("tool.response", response_str[:2000] + "...")
 
             # Exit code / error handling
             span.set_attribute("exit_code", exit_code)
             span.set_attribute("error", is_error)
             if error_message:
                 span.set_attribute("error.message", error_message[:500])
+                span.set_attribute("tool.error", error_message[:500])
+
+            # Add tool.status attribute
+            if is_error:
+                span.set_attribute("tool.status", "error")
+            else:
+                span.set_attribute("tool.status", "success")
 
             # Token usage (if available from transcript)
             if token_usage:
