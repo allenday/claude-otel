@@ -37,7 +37,7 @@ Package configuration lives in `pyproject.toml`.
   - Adds tokens.* span attributes: tokens.input, tokens.output, tokens.cache_read, tokens.cache_creation, tokens.total
   - Tests added in `tests/test_hooks.py`
 - [x] Add resilience features (bounded queues/drop policy, retries).
-- [alpha] Refactor hooks into installable CLI entry points (move `hooks/*.py` to `src/claude_otel/hooks/`, add `claude-otel-pre-tool` and `claude-otel-post-tool` scripts to `pyproject.toml`).
+- [x] Refactor hooks into installable CLI entry points (move `hooks/*.py` to `src/claude_otel/hooks/`, add `claude-otel-pre-tool` and `claude-otel-post-tool` scripts to `pyproject.toml`).
 
 ---
 

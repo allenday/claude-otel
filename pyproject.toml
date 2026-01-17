@@ -24,6 +24,8 @@ dev = [
 
 [project.scripts]
 claude-otel = "claude_otel.wrapper:main"
+claude-otel-pre-tool = "claude_otel.hooks.pre_tool:main"
+claude-otel-post-tool = "claude_otel.hooks.post_tool:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

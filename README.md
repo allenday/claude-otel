@@ -307,6 +307,61 @@ Token usage is extracted from the Claude CLI transcript file which contains deta
        (traces, logs, metrics)
 ```
 
+## Tool Hooks
+
+For per-tool-invocation telemetry, the package provides hook commands that integrate with Claude CLI's hook system.
+
+### Installation
+
+After `pip install -e .`, the following commands are available on your PATH:
+
+| Command | Description |
+|---------|-------------|
+| `claude-otel-pre-tool` | PreToolUse hook - records start time for duration calculation |
+| `claude-otel-post-tool` | PostToolUse hook - creates OTEL span with full attributes |
+
+### Configuration
+
+Add these hooks to your Claude CLI settings (`~/.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": ["claude-otel-pre-tool"]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": ["claude-otel-post-tool"]
+      }
+    ]
+  }
+}
+```
+
+### Span Attributes
+
+Each tool invocation span includes:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `tool.name` | string | Tool name (Bash, Read, Write, etc.) |
+| `tool.use_id` | string | Unique tool invocation ID |
+| `session.id` | string | Claude session ID |
+| `duration_ms` | float | Tool execution time in milliseconds |
+| `input.summary` | string | Sanitized summary of tool input |
+| `input.truncated` | bool | Whether input was truncated |
+| `response_bytes` | int | Size of tool response |
+| `response.truncated` | bool | Whether response exceeds threshold |
+| `exit_code` | int | Exit code for Bash commands |
+| `error` | bool | Whether an error occurred |
+| `error.message` | string | Error message (if error=true) |
+| `tokens.*` | int | Token usage metrics (when available) |
+
 ## License
 
 MIT
