@@ -144,15 +144,27 @@ options = ClaudeAgentOptions(
 ### Feature Gap Tasks
 
 #### Phase 1: SDK Integration & Hook Enhancement
-- [ ] Add SDK-based hooks alongside CLI hooks for richer telemetry
+
+**Note:** MessageComplete, UserPromptSubmit, and PreCompact hooks require SDK integration (not available in CLI hook mode). Breaking down into prerequisite tasks:
+
+- [ ] Add SDK-based runner alongside subprocess wrapper
+  - [ ] Add `claude-agent-sdk` dependency to pyproject.toml
+  - [ ] Implement SDK-based runner in `src/claude_otel/sdk_runner.py`
+  - [ ] Create SDK hook manager to bridge SDK callbacks to OTEL spans
+  - [ ] Add `--use-sdk` flag to `claude-otel` CLI for opt-in SDK mode
+  - [ ] Maintain backward compatibility with subprocess wrapper (default)
+
+- [ ] Add SDK-based hooks for richer telemetry (requires SDK runner)
   - [bravo] Implement UserPromptSubmit hook to capture prompt and model
-  - [charlie] Implement MessageComplete hook for turn tracking and usage
+  - [ ] Implement MessageComplete hook for turn tracking and usage
+    - [ ] Extract token usage from `message.usage` (input_tokens, output_tokens)
+    - [ ] Track turn count per session (increment on each message)
+    - [ ] Update span with cumulative token usage
+    - [ ] Add turn events with incremental token counts
+    - [ ] Add `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` attributes
+    - [ ] Store message history for session context
   - [alpha] Implement PreCompact hook for context window tracking
   - [ ] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
-- [ ] Add turn/conversation tracking to spans
-  - [ ] Track turn count per session
-  - [ ] Add turn events with incremental token counts
-  - [ ] Store message history for session context
 - [ ] Enhance tool span attributes
   - [ ] Add detailed `tool.input.*` and `tool.response.*` attributes
   - [ ] Add `tool.status` attribute (success/error)
