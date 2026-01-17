@@ -24,6 +24,61 @@ claude-otel "What is 2+2?"
 
 All arguments are passed through to the underlying `claude` command. The wrapper creates an OTEL session span and exports telemetry to the configured collector.
 
+## CLI Flags
+
+### claude-otel Flags
+
+These flags control `claude-otel` behavior and are not passed to Claude:
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--use-sdk` | - | `false` | Use SDK-based runner for richer telemetry (enables gen_ai.* attributes, turn tracking, interactive mode support) |
+| `--claude-otel-debug` | - | `false` | Enable debug output to stderr (also set via `CLAUDE_OTEL_DEBUG=1`) |
+| `--version` | `-v` | - | Show version and exit |
+| `--config` | - | - | Show current configuration (OTEL endpoint, service name, enabled exporters) and exit |
+
+### Interactive Mode
+
+When invoked without a prompt, `claude-otel --use-sdk` enters interactive mode:
+
+```bash
+# Start interactive REPL
+claude-otel --use-sdk
+
+# Interactive mode with custom model
+claude-otel --use-sdk --model=opus
+```
+
+**Interactive mode features:**
+- Multi-turn conversations with shared context
+- Session metrics display (tokens, tools used)
+- Rich console output with emoji indicators (🤖, 🔧, ✅, ❌)
+- Exit commands: `exit`, `quit`, `bye`, or press Ctrl+C twice
+
+**Note:** Interactive mode requires `--use-sdk` flag and is not available in subprocess mode.
+
+### Claude CLI Flags (Pass-through)
+
+All standard Claude CLI flags are supported and passed through. Use the `--flag=value` format (with `=`) to avoid ambiguity:
+
+```bash
+# Recommended: use = for flags with values
+claude-otel --model=opus --permission-mode=bypassPermissions "review my code"
+
+# Also works: space-separated (but prompt must be last)
+claude-otel --model opus "review my code"
+
+# Boolean flags (no value needed)
+claude-otel --bypass-permissions "fix this bug"
+```
+
+**Common Claude flags:**
+- `--model=<name>` - Select model (e.g., `opus`, `sonnet`, `haiku`)
+- `--permission-mode=<mode>` - Permission mode (`allow`, `deny`, `bypassPermissions`)
+- `--bypass-permissions` - Bypass permission prompts (boolean flag)
+- `--setting-sources=<sources>` - Comma-separated list of setting sources
+- All other `claude` CLI flags - see `claude --help` for full list
+
 ### Quick Start
 
 ```bash
@@ -35,7 +90,193 @@ OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317" claude-otel "Hello"
 
 # Enable debug output
 CLAUDE_OTEL_DEBUG=1 claude-otel "Hello"
+
+# SDK mode with richer telemetry
+claude-otel --use-sdk "Analyze this codebase"
+
+# Interactive multi-turn session
+claude-otel --use-sdk
 ```
+
+## Interactive Mode Guide
+
+Interactive mode provides a multi-turn REPL (Read-Eval-Print Loop) for conversational sessions with Claude, maintaining full context across turns.
+
+### Starting Interactive Mode
+
+```bash
+# Basic interactive session (automatically enters REPL when no prompt provided)
+claude-otel --use-sdk
+
+# With specific model
+claude-otel --use-sdk --model=opus
+
+# With custom permissions
+claude-otel --use-sdk --permission-mode=bypassPermissions
+
+# With debug output
+claude-otel --use-sdk --claude-otel-debug
+```
+
+**Requirements:**
+- `--use-sdk` flag must be provided (interactive mode uses SDK-based runner)
+- Claude Agent SDK installed (`pip install claude-agent-sdk`)
+
+### Features
+
+**Conversation Context:**
+- All turns share the same session context
+- Claude remembers previous messages and tool interactions
+- Context window managed automatically with compaction when needed
+
+**Session Metrics:**
+After each turn, see cumulative session statistics:
+```
+Session: 3 turns | 1,250 tokens (750 in, 500 out) | 5 tools used
+```
+
+**Rich Console Output:**
+- 🤖 Claude thinking indicator
+- 🔧 Tool execution notifications with duration
+- ✅ Success indicators
+- ❌ Error indicators
+- Formatted response panels using Rich library
+
+**Startup Banner:**
+```
+┌─ Interactive Mode ───────────────────────────────────┐
+│ Claude CLI with OpenTelemetry                        │
+│                                                      │
+│ Service: claude-otel                                │
+│ Endpoint: http://localhost:4317                     │
+│ Telemetry: Enabled                                  │
+│ Model: claude-sonnet-4                              │
+│                                                      │
+│ Type 'exit', 'quit', or 'bye' to end the session   │
+│ Press Ctrl+C twice to exit immediately              │
+└──────────────────────────────────────────────────────┘
+```
+
+### Exiting Interactive Mode
+
+**Exit commands:**
+- Type `exit`, `quit`, or `bye` at any prompt
+
+**Keyboard shortcuts:**
+- Press `Ctrl+C` once to cancel current input
+- Press `Ctrl+C` twice quickly to force exit immediately
+
+### Example Session
+
+```bash
+$ claude-otel --use-sdk
+
+┌─ Interactive Mode ───────────────────────────────────┐
+│ Claude CLI with OpenTelemetry                        │
+│ Service: claude-otel                                │
+│ Endpoint: http://localhost:4317                     │
+│ Telemetry: Enabled                                  │
+└──────────────────────────────────────────────────────┘
+
+You: What files are in the current directory?
+
+🤖 Claude is thinking...
+🔧 Tool: Bash - ls -la
+✅ Completed in 45ms
+
+The current directory contains:
+- README.md (documentation)
+- src/ (source code)
+- tests/ (test files)
+[... Claude's formatted response ...]
+
+Session: 1 turns | 250 tokens (150 in, 100 out) | 1 tools used
+
+You: What is the largest file?
+
+🤖 Claude is thinking...
+🔧 Tool: Bash - du -sh * | sort -rh | head -5
+✅ Completed in 32ms
+
+Based on the previous listing, the largest file is...
+[... Claude's response with context awareness ...]
+
+Session: 2 turns | 480 tokens (280 in, 200 out) | 2 tools used
+
+You: exit
+
+Session complete! Total: 2 turns, 480 tokens, 2 tools used.
+```
+
+### Interactive Mode vs Single-Turn Mode
+
+| Feature | Single-Turn | Interactive |
+|---------|-------------|-------------|
+| **Command** | `claude-otel "prompt"` | `claude-otel --use-sdk` (no prompt) |
+| **Context** | One-off command | Persistent across turns |
+| **Exit** | Automatic after response | Manual (`exit`/`quit`/`bye` or Ctrl+C) |
+| **Metrics** | Per-command | Cumulative per session |
+| **Use Case** | Automation, scripts | Development, exploration, debugging |
+
+### Telemetry in Interactive Mode
+
+Interactive sessions generate rich telemetry with full conversation tracking:
+
+**Session Span Attributes:**
+- `turns`: Total conversation turns
+- `gen_ai.usage.input_tokens`: Cumulative input tokens
+- `gen_ai.usage.output_tokens`: Cumulative output tokens
+- `tokens.cache_read`: Cumulative cache read tokens
+- `tokens.cache_creation`: Cumulative cache creation tokens
+- `tools_used`: Total tool invocations
+- `tool_names`: Comma-separated list of unique tools used
+- `model`: Model name (e.g., `claude-sonnet-4`)
+
+**Turn Events:**
+Each turn generates a `turn.completed` event with incremental token counts:
+```
+Event: turn.completed
+  turn: 2
+  gen_ai.usage.input_tokens: 130 (this turn only)
+  gen_ai.usage.output_tokens: 50 (this turn only)
+  tokens.cache_read: 20 (this turn only)
+```
+
+**Tool Spans:**
+Each tool invocation creates a span with full attributes (same as single-turn mode).
+
+**Context Compaction Events:**
+When the context window is compacted, a `compaction` event is logged with the trigger reason.
+
+### Tips for Interactive Mode
+
+1. **Use for exploration:** Interactive mode excels at iterative tasks where context matters
+   ```
+   You: Show me the database schema
+   You: Find all tables with user data
+   You: Generate a migration to add email validation
+   ```
+
+2. **Monitor session metrics:** Keep an eye on token usage to avoid context window limits
+   - The session metrics line shows cumulative token counts after each turn
+   - Watch for context compaction events if approaching limits
+
+3. **Enable debug mode:** See detailed telemetry export information
+   ```bash
+   claude-otel --use-sdk --claude-otel-debug
+   ```
+
+4. **Check configuration first:** Verify your OTEL setup before starting a session
+   ```bash
+   claude-otel --config
+   claude-otel --use-sdk  # Start with verified config
+   ```
+
+5. **Use with specific models:** Test different models in the same interactive session
+   ```bash
+   claude-otel --use-sdk --model=haiku  # Fast iterations
+   claude-otel --use-sdk --model=opus   # Complex reasoning
+   ```
 
 ## Environment Variables
 
