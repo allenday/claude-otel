@@ -184,12 +184,13 @@ class TestMetricsInstrumentation:
             metrics._cache_creations_counter = None
             metrics._model_requests_counter = None
             metrics._compaction_counter = None
+            metrics._prompt_latency_histogram = None
 
             metrics._ensure_instruments()
 
             # Verify all instruments were created
             assert meter.create_counter.call_count == 8  # 8 counters
-            assert meter.create_histogram.call_count == 1  # 1 histogram
+            assert meter.create_histogram.call_count == 2  # 2 histograms (tool_duration + prompt_latency)
 
             # Verify specific metric names
             counter_names = [call[1]["name"] for call in meter.create_counter.call_args_list]
@@ -241,4 +242,5 @@ class TestMetricsShutdown:
         assert metrics._cache_creations_counter is None
         assert metrics._model_requests_counter is None
         assert metrics._compaction_counter is None
+        assert metrics._prompt_latency_histogram is None
         assert metrics._in_flight_gauge_value == 0

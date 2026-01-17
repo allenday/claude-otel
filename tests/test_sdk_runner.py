@@ -508,6 +508,106 @@ class TestRunAgentInteractive:
 
             assert exit_code == 0
 
+    @pytest.mark.asyncio
+    async def test_run_agent_interactive_tracks_prompt_latency(self, mock_tracer, test_config):
+        """Should track latency between prompts in interactive mode."""
+        import time
+
+        user_inputs = ["First prompt", "Second prompt", "exit"]
+        input_iter = iter(user_inputs)
+
+        mock_message = Mock()
+        mock_message.content = "Response"
+
+        async def mock_receive():
+            yield mock_message
+
+        mock_client = AsyncMock()
+        mock_client.query = AsyncMock()
+        mock_client.receive_response = mock_receive
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+
+        with patch("claude_otel.sdk_runner.ClaudeSDKClient", return_value=mock_client):
+            with patch("builtins.input", side_effect=lambda _: next(input_iter)):
+                with patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup:
+                    mock_hooks = Mock()
+                    mock_hooks.session_span = Mock()
+                    mock_hooks.complete_session = Mock()
+                    mock_hooks.metrics = {"model": "sonnet"}
+                    mock_hooks.tools_used = []  # Must be a list for len() check
+                    mock_setup.return_value = (mock_hooks, {})
+
+                    with patch("claude_otel.sdk_runner.otel_metrics.record_prompt_latency") as mock_record:
+                        exit_code = await run_agent_interactive(
+                            config=test_config,
+                            tracer=mock_tracer,
+                        )
+
+                        # Should have recorded latency for the second and third prompts
+                        # (first prompt has no prior completion time, but "exit" counts as a prompt input)
+                        assert mock_record.call_count == 2
+
+                        # Verify the latency was recorded with model info
+                        call_args = mock_record.call_args
+                        latency_ms = call_args[0][0]
+                        model = call_args[0][1]
+
+                        assert latency_ms >= 0  # Should be non-negative
+                        assert model == "sonnet"
+
+        assert exit_code == 0
+
+    @pytest.mark.asyncio
+    async def test_run_agent_interactive_adds_latency_to_span(self, mock_tracer, test_config):
+        """Should add prompt latency statistics to session span."""
+        user_inputs = ["First prompt", "Second prompt", "Third prompt", "exit"]
+        input_iter = iter(user_inputs)
+
+        mock_message = Mock()
+        mock_message.content = "Response"
+
+        async def mock_receive():
+            yield mock_message
+
+        mock_client = AsyncMock()
+        mock_client.query = AsyncMock()
+        mock_client.receive_response = mock_receive
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+
+        with patch("claude_otel.sdk_runner.ClaudeSDKClient", return_value=mock_client):
+            with patch("builtins.input", side_effect=lambda _: next(input_iter)):
+                with patch("claude_otel.sdk_runner.setup_sdk_hooks") as mock_setup:
+                    mock_span = Mock()
+                    mock_hooks = Mock()
+                    mock_hooks.session_span = mock_span
+                    mock_hooks.complete_session = Mock()
+                    mock_hooks.metrics = {"model": "sonnet"}
+                    mock_hooks.tools_used = []  # Must be a list for len() check
+                    mock_setup.return_value = (mock_hooks, {})
+
+                    exit_code = await run_agent_interactive(
+                        config=test_config,
+                        tracer=mock_tracer,
+                    )
+
+                    # Should have set latency attributes on span
+                    # (3 prompts total, so 2 latencies: prompt 2 and prompt 3)
+                    set_attribute_calls = [
+                        call for call in mock_span.set_attribute.call_args_list
+                        if "prompt.latency" in str(call)
+                    ]
+
+                    # Should have avg, min, max, and count attributes
+                    attribute_names = {call[0][0] for call in set_attribute_calls}
+                    assert "prompt.latency_avg_ms" in attribute_names
+                    assert "prompt.latency_min_ms" in attribute_names
+                    assert "prompt.latency_max_ms" in attribute_names
+                    assert "prompt.latency_count" in attribute_names
+
+        assert exit_code == 0
+
 
 class TestRunAgentInteractiveSync:
     """Tests for synchronous wrapper run_agent_interactive_sync."""

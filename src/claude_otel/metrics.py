@@ -34,6 +34,7 @@ _cache_misses_counter: Optional[metrics.Counter] = None
 _cache_creations_counter: Optional[metrics.Counter] = None
 _model_requests_counter: Optional[metrics.Counter] = None
 _compaction_counter: Optional[metrics.Counter] = None
+_prompt_latency_histogram: Optional[metrics.Histogram] = None
 
 
 def _create_metric_exporter(config: OTelConfig):
@@ -121,6 +122,7 @@ def _ensure_instruments():
     global _tool_calls_counter, _tool_errors_counter, _tool_duration_histogram
     global _turn_counter, _cache_hits_counter, _cache_misses_counter
     global _cache_creations_counter, _model_requests_counter, _compaction_counter
+    global _prompt_latency_histogram
 
     if _meter is None:
         return
@@ -187,6 +189,13 @@ def _ensure_instruments():
             name="claude.context_compactions_total",
             description="Total number of context compaction events",
             unit="1",
+        )
+
+    if _prompt_latency_histogram is None:
+        _prompt_latency_histogram = _meter.create_histogram(
+            name="claude.prompt_latency_ms",
+            description="Latency between prompts in interactive mode (human response time)",
+            unit="ms",
         )
 
 
@@ -315,12 +324,29 @@ def record_context_compaction(trigger: str = "unknown", model: str = "unknown"):
     _compaction_counter.add(1, attributes)
 
 
+def record_prompt_latency(latency_ms: float, model: str = "unknown"):
+    """Record prompt latency (time between prompts in interactive mode).
+
+    Args:
+        latency_ms: Latency in milliseconds between prompt completion and next submission.
+        model: Model being used (default: "unknown").
+    """
+    _ensure_instruments()
+
+    if _prompt_latency_histogram is None:
+        return
+
+    attributes = {"model": model}
+    _prompt_latency_histogram.add(latency_ms, attributes)
+
+
 def shutdown_metrics():
     """Shutdown the meter provider and flush pending metrics."""
     global _meter_provider, _meter, _tool_calls_counter, _tool_errors_counter
     global _tool_duration_histogram, _in_flight_gauge_value
     global _turn_counter, _cache_hits_counter, _cache_misses_counter
     global _cache_creations_counter, _model_requests_counter, _compaction_counter
+    global _prompt_latency_histogram
 
     if _meter_provider is not None:
         _meter_provider.shutdown()
@@ -337,3 +363,4 @@ def shutdown_metrics():
     _cache_creations_counter = None
     _model_requests_counter = None
     _compaction_counter = None
+    _prompt_latency_histogram = None

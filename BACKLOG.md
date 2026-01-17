@@ -251,7 +251,7 @@ options = ClaudeAgentOptions(
   - Record tool start/end times in SDK hooks
   - Add tool.duration_ms attribute to tool spans
   - Include in tool metrics
-- [charlie] Add interactive prompt latency tracking
+- [x] Add interactive prompt latency tracking
   - Track time between prompts in interactive mode
   - Record human response time (prompt-to-prompt latency)
   - Add prompt.latency_ms metric

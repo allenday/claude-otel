@@ -6,6 +6,7 @@ claude-agent-sdk directly for richer telemetry via SDK hooks.
 
 import asyncio
 import logging
+import time
 from typing import Optional
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, HookMatcher
@@ -17,6 +18,7 @@ from rich.panel import Panel
 
 from claude_otel.config import get_config, OTelConfig
 from claude_otel.sdk_hooks import SDKTelemetryHooks
+from claude_otel import metrics as otel_metrics
 
 
 def setup_sdk_hooks(
@@ -230,6 +232,10 @@ async def run_agent_interactive(
         "prompts_count": 0,
     }
 
+    # Prompt latency tracking
+    last_prompt_completion_time: Optional[float] = None
+    prompt_latencies: list[float] = []
+
     # Callback for stderr output from Claude CLI
     def log_claude_stderr(line: str) -> None:
         """Log Claude CLI stderr output for debugging."""
@@ -259,6 +265,40 @@ async def run_agent_interactive(
             # Multi-turn loop
             while True:
                 try:
+                    # Track prompt submission time for latency calculation
+                    prompt_submit_time = time.time()
+
+                    # Calculate latency from last prompt completion (if any)
+                    if last_prompt_completion_time is not None:
+                        prompt_latency_ms = (prompt_submit_time - last_prompt_completion_time) * 1000
+                        prompt_latencies.append(prompt_latency_ms)
+
+                        # Get model from hooks for metrics attribution
+                        model = hooks.metrics.get("model", "unknown") if hasattr(hooks, "metrics") else "unknown"
+
+                        # Record latency metric
+                        otel_metrics.record_prompt_latency(prompt_latency_ms, model)
+
+                        # Log latency metric
+                        if logger:
+                            logger.info(
+                                "prompt.latency",
+                                extra={
+                                    "prompt.latency_ms": prompt_latency_ms,
+                                    "turn": session_metrics["prompts_count"] + 1,
+                                },
+                            )
+
+                        # Add latency event to session span
+                        if hooks.session_span:
+                            hooks.session_span.add_event(
+                                "prompt.latency",
+                                {
+                                    "latency_ms": prompt_latency_ms,
+                                    "turn": session_metrics["prompts_count"] + 1,
+                                },
+                            )
+
                     # Get user input
                     user_input = input("\n> ")
                     ctrl_c_count = 0  # Reset on successful input
@@ -295,6 +335,9 @@ async def run_agent_interactive(
                             )
                         )
 
+                    # Record prompt completion time for next latency calculation
+                    last_prompt_completion_time = time.time()
+
                     # Update session metrics from hooks
                     if hasattr(hooks, "metrics"):
                         session_metrics["total_input_tokens"] = hooks.metrics.get("input_tokens", 0)
@@ -326,6 +369,16 @@ async def run_agent_interactive(
 
         # Complete the session span
         if hooks.session_span:
+            # Add latency statistics to session span
+            if prompt_latencies:
+                avg_latency = sum(prompt_latencies) / len(prompt_latencies)
+                min_latency = min(prompt_latencies)
+                max_latency = max(prompt_latencies)
+                hooks.session_span.set_attribute("prompt.latency_avg_ms", avg_latency)
+                hooks.session_span.set_attribute("prompt.latency_min_ms", min_latency)
+                hooks.session_span.set_attribute("prompt.latency_max_ms", max_latency)
+                hooks.session_span.set_attribute("prompt.latency_count", len(prompt_latencies))
+
             hooks.complete_session()
 
         # Show session summary
@@ -339,17 +392,36 @@ async def run_agent_interactive(
             console.print(f"  Cache creation tokens: {session_metrics['total_cache_creation_tokens']}")
         console.print(f"  Tools used: {session_metrics['total_tools_used']}")
 
+        # Show prompt latency statistics
+        if prompt_latencies:
+            avg_latency = sum(prompt_latencies) / len(prompt_latencies)
+            min_latency = min(prompt_latencies)
+            max_latency = max(prompt_latencies)
+            console.print(f"  Prompt latencies:")
+            console.print(f"    Average: {avg_latency:.1f}ms")
+            console.print(f"    Min: {min_latency:.1f}ms")
+            console.print(f"    Max: {max_latency:.1f}ms")
+
         if logger:
+            log_extra = {
+                "tokens.input": session_metrics["total_input_tokens"],
+                "tokens.output": session_metrics["total_output_tokens"],
+                "tokens.cache_read": session_metrics["total_cache_read_tokens"],
+                "tokens.cache_creation": session_metrics["total_cache_creation_tokens"],
+                "tools.total": session_metrics["total_tools_used"],
+                "prompts.count": session_metrics["prompts_count"],
+            }
+
+            # Add latency statistics if available
+            if prompt_latencies:
+                log_extra["prompt.latency_avg_ms"] = sum(prompt_latencies) / len(prompt_latencies)
+                log_extra["prompt.latency_min_ms"] = min(prompt_latencies)
+                log_extra["prompt.latency_max_ms"] = max(prompt_latencies)
+                log_extra["prompt.latency_count"] = len(prompt_latencies)
+
             logger.info(
                 "claude SDK interactive session completed",
-                extra={
-                    "tokens.input": session_metrics["total_input_tokens"],
-                    "tokens.output": session_metrics["total_output_tokens"],
-                    "tokens.cache_read": session_metrics["total_cache_read_tokens"],
-                    "tokens.cache_creation": session_metrics["total_cache_creation_tokens"],
-                    "tools.total": session_metrics["total_tools_used"],
-                    "prompts.count": session_metrics["prompts_count"],
-                },
+                extra=log_extra,
             )
 
         return 0
