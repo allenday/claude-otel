@@ -236,6 +236,11 @@ options = ClaudeAgentOptions(
 
 ## Post-MVP: Bug Fixes & Improvements
 - [x] Fix interactive mode output formatting to match claude_telemetry (accumulate response, display in Panel)
+- [ ] Improve interactive mode input prompting
+  - Add clear "Waiting for your input..." or similar indicator before prompt
+  - Show context (e.g., turn number, session info) in prompt
+  - Make it obvious when Claude is waiting vs. processing
+  - Consider using Rich's styled prompt or status indicators
 
 ## Telemetry Enhancements
 - [x] Add session duration tracking
