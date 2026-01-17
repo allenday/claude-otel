@@ -235,4 +235,4 @@ options = ClaudeAgentOptions(
 ---
 
 ## Post-MVP: Bug Fixes & Improvements
-- [bravo] Fix interactive mode output formatting to match claude_telemetry (accumulate response, display in Panel)
+- [x] Fix interactive mode output formatting to match claude_telemetry (accumulate response, display in Panel)

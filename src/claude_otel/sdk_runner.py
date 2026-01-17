@@ -12,6 +12,8 @@ from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, HookMatcher
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 
 from claude_otel.config import get_config, OTelConfig
 from claude_otel.sdk_hooks import SDKTelemetryHooks
@@ -102,6 +104,7 @@ async def run_agent_with_sdk(
 
     # Use Rich Console for formatted output
     console = Console()
+    response_text = ""
 
     try:
         async with ClaudeSDKClient(options=options) as client:
@@ -110,10 +113,20 @@ async def run_agent_with_sdk(
 
             # Receive and process responses
             async for message in client.receive_response():
-                # Extract and display text content
+                # Extract and accumulate text content
                 text = extract_message_text(message)
                 if text:
-                    console.print(text, end="")
+                    response_text += text
+
+            # Display response with formatting
+            if response_text:
+                console.print(
+                    Panel(
+                        Markdown(response_text),
+                        title="Claude",
+                        border_style="cyan",
+                    )
+                )
 
         # Complete the session span
         if hooks.session_span:
@@ -260,13 +273,23 @@ async def run_agent_interactive(
                     session_metrics["prompts_count"] += 1
 
                     # Receive and process responses
+                    console.print()  # Empty line for spacing
                     response_text = ""
                     async for message in client.receive_response():
-                        # Extract and display text content
+                        # Extract and accumulate text content
                         text = extract_message_text(message)
                         if text:
-                            console.print(text, end="")
                             response_text += text
+
+                    # Display response with formatting
+                    if response_text:
+                        console.print(
+                            Panel(
+                                Markdown(response_text),
+                                title="Claude",
+                                border_style="cyan",
+                            )
+                        )
 
                     # Update session metrics from hooks
                     if hasattr(hooks, "metrics"):
