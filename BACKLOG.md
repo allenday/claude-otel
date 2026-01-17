@@ -161,7 +161,7 @@ options = ClaudeAgentOptions(
   - [ ] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
 
 **MessageComplete Hook Sub-Tasks (spawned from parent task):**
-- [ ] MessageComplete: Extract token usage from `message.usage` (input_tokens, output_tokens)
+- [charlie] MessageComplete: Extract token usage from `message.usage` (input_tokens, output_tokens)
 - [ ] MessageComplete: Track turn count per session (increment on each message)
 - [ ] MessageComplete: Update span with cumulative token usage
 - [ ] MessageComplete: Add turn events with incremental token counts
