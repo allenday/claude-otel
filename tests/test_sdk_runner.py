@@ -660,7 +660,7 @@ class TestSDKRunnerIntegration:
 
                 assert exit_code == 0
                 # Should have created hooks and completed the session
-                mock_setup.assert_called_once_with(mock_tracer)
+                mock_setup.assert_called_once_with(mock_tracer, None)
                 mock_hooks.complete_session.assert_called_once()
 
     @pytest.mark.asyncio
