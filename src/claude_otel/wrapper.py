@@ -1,6 +1,7 @@
 """Lightweight wrapper that shells out to Claude CLI with OTEL instrumentation."""
 
 import logging
+import os
 import sys
 import subprocess
 import uuid
@@ -156,6 +157,7 @@ def setup_logging(config: OTelConfig) -> tuple[Optional[logging.Logger], Optiona
 
 def run_claude(args: list[str], tracer: trace.Tracer, logger: Optional[logging.Logger]) -> int:
     """Run Claude CLI within a session span."""
+    claude_bin = os.environ.get("CLAUDE_BIN", "claude")
     session_id = str(uuid.uuid4())
     preview = None
 
@@ -182,7 +184,7 @@ def run_claude(args: list[str], tracer: trace.Tracer, logger: Optional[logging.L
         try:
             # Shell out to Claude CLI, passing through all arguments
             result = subprocess.run(
-                ["claude"] + args,
+                [claude_bin] + args,
                 stdin=sys.stdin if sys.stdin.isatty() else None,
                 stdout=sys.stdout,
                 stderr=sys.stderr,

@@ -48,6 +48,7 @@ CLAUDE_OTEL_DEBUG=1 claude-otel "Hello"
 | `OTEL_SERVICE_NAME` | `claude-otel` | Service name for traces/logs |
 | `OTEL_SERVICE_NAMESPACE` | `infra` | Service namespace |
 | `OTEL_RESOURCE_ATTRIBUTES` | (empty) | Additional attributes as `key=value,key2=value2` |
+| `CLAUDE_BIN` | `claude` | Path/command for Claude CLI binary to exec |
 
 ### Exporter Toggles
 
