@@ -209,10 +209,10 @@ options = ClaudeAgentOptions(
   - [ ] Document CLI flags and interactive mode
   - [ ] Add examples for SDK-based usage
   - [ ] Update troubleshooting guide
-- [charlie] Create migration guide
-  - [ ] Document differences between subprocess and SDK modes
-  - [ ] Provide migration path from simple to rich telemetry
-  - [ ] Show side-by-side examples
+- [x] Create migration guide
+  - [x] Document differences between subprocess and SDK modes
+  - [x] Provide migration path from simple to rich telemetry
+  - [x] Show side-by-side examples
 
 ### Implementation Notes
 
