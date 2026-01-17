@@ -274,25 +274,89 @@ export OTEL_TRACES_EXPORTER=none
 
 When `OTEL_METRICS_EXPORTER=otlp` is set, the following metrics are exported:
 
+### Tool Metrics
+
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `claude.tool_calls_total` | Counter | `tool.name` | Total tool invocations |
 | `claude.tool_calls_errors_total` | Counter | `tool.name` | Tool call errors |
-| `claude.tool_call_duration_ms` | Histogram | `tool.name` | Tool call duration |
+| `claude.tool_call_duration_ms` | Histogram | `tool.name` | Tool call duration in milliseconds |
 
-## Token Usage Tracking
+### Conversation Metrics
 
-Tool spans include token usage attributes when available from the Claude transcript:
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `claude.turns_total` | Counter | `model` | Total conversation turns completed |
+| `claude.model_requests_total` | Counter | `model` | Total API requests by model type |
+
+### Cache Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `claude.cache_hits_total` | Counter | `model` | Cache hits (cache_read_input_tokens > 0) |
+| `claude.cache_misses_total` | Counter | `model` | Cache misses (cache_read_input_tokens == 0) |
+| `claude.cache_creations_total` | Counter | `model` | Cache creations (cache_creation_input_tokens > 0) |
+
+### Context Management Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `claude.context_compactions_total` | Counter | `trigger`, `model` | Context compaction events with trigger reason |
+
+## Semantic Conventions
+
+This wrapper follows [OpenTelemetry Semantic Conventions for Generative AI](https://opentelemetry.io/docs/specs/semconv/gen-ai/) to ensure compatibility with LLM observability tools.
+
+### gen_ai.* Attributes (SDK Mode)
+
+When using SDK-based hooks (`--use-sdk` flag), the following semantic convention attributes are included:
+
+| Attribute | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `gen_ai.system` | string | `anthropic` | The AI system/provider |
+| `gen_ai.request.model` | string | `claude-sonnet-4` | Model requested |
+| `gen_ai.response.model` | string | `claude-sonnet-4` | Model that responded |
+| `gen_ai.operation.name` | string | `execute_tool` | Operation type |
+| `gen_ai.usage.input_tokens` | int | `1234` | Cumulative input tokens for session |
+| `gen_ai.usage.output_tokens` | int | `567` | Cumulative output tokens for session |
+
+### Session & Turn Tracking (SDK Mode)
+
+SDK-based hooks provide rich conversation tracking:
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `tokens.input` | int | Input tokens for the API call |
-| `tokens.output` | int | Output tokens generated |
-| `tokens.cache_read` | int | Tokens read from cache |
-| `tokens.cache_creation` | int | Tokens used for cache creation |
+| `model` | string | Model name (e.g., `claude-sonnet-4`) |
+| `prompt` | string | Initial user prompt (truncated to 1000 chars) |
+| `session.id` | string | Unique Claude session identifier |
+| `turns` | int | Total conversation turns in this session |
+| `tools_used` | int | Number of tools invoked |
+| `tool_names` | string | Comma-separated list of unique tools used |
+
+**Turn Events:** Each completed turn adds a `turn.completed` event with incremental token counts for that specific turn.
+
+## Token Usage Tracking
+
+Token usage attributes are available in both CLI and SDK modes:
+
+### Cumulative Token Attributes (Session Span)
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `gen_ai.usage.input_tokens` | int | Total input tokens for the session |
+| `gen_ai.usage.output_tokens` | int | Total output tokens for the session |
+| `tokens.cache_read` | int | Total tokens read from cache |
+| `tokens.cache_creation` | int | Total tokens used for cache creation |
+| `tokens.input` | int | Legacy attribute (same as gen_ai.usage.input_tokens) |
+| `tokens.output` | int | Legacy attribute (same as gen_ai.usage.output_tokens) |
 | `tokens.total` | int | Sum of all token counts |
 
-Token usage is extracted from the Claude CLI transcript file which contains detailed usage metrics per API call.
+### Token Sources
+
+- **CLI Mode:** Extracted from Claude CLI transcript file (per-API-call usage)
+- **SDK Mode:** Extracted from `message.usage` object (per-turn usage with cumulative totals)
+
+SDK mode provides richer tracking with per-turn granularity via turn events.
 
 ## Architecture
 
@@ -306,6 +370,57 @@ Token usage is extracted from the Claude CLI transcript file which contains deta
        └────────────────────────────────────────┘
        (traces, logs, metrics)
 ```
+
+### CLI Mode vs SDK Mode
+
+`claude-otel` supports two execution modes with different telemetry capabilities:
+
+#### CLI Mode (Default)
+
+**Usage:** `claude-otel "your prompt"`
+
+- Wraps the Claude CLI as a subprocess
+- Uses CLI hooks (PreToolUse, PostToolUse, PreCompact) via settings.json
+- Lightweight and simple
+- Token usage extracted from transcript files
+- Basic session span with tool invocations
+
+**Best for:**
+- Quick setup and simple use cases
+- Drop-in replacement for `claude` command
+- Minimal dependencies
+
+#### SDK Mode (Enhanced Telemetry)
+
+**Usage:** `claude-otel --use-sdk "your prompt"`
+
+- Uses `claude-agent-sdk` directly (no subprocess)
+- Uses SDK hooks (UserPromptSubmit, MessageComplete, PreToolUse, PostToolUse, PreCompact)
+- Rich semantic conventions (`gen_ai.*` attributes)
+- Turn tracking with per-turn token counts
+- Model information capture
+- Interactive mode support
+- Context compaction tracking
+
+**Best for:**
+- Production observability with full context
+- LLM-specific monitoring tools (Logfire, Sentry AI)
+- Multi-turn conversations and interactive sessions
+- Detailed performance analysis
+
+**Comparison:**
+
+| Feature | CLI Mode | SDK Mode |
+|---------|----------|----------|
+| gen_ai.* attributes | ❌ | ✅ |
+| Model tracking | ❌ | ✅ |
+| Turn tracking | ❌ | ✅ |
+| Per-turn tokens | ❌ | ✅ |
+| Interactive mode | ❌ | ✅ |
+| Prompt capture | ❌ | ✅ |
+| Tool spans | ✅ | ✅ |
+| Cache metrics | ✅ | ✅ |
+| Compaction events | ✅ | ✅ |
 
 ## Tool Hooks
 
