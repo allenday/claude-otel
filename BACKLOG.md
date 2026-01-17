@@ -156,7 +156,7 @@ options = ClaudeAgentOptions(
 
 - [ ] Add SDK-based hooks for richer telemetry (requires SDK runner)
   - [bravo] Implement UserPromptSubmit hook to capture prompt and model
-  - [ ] Implement MessageComplete hook for turn tracking and usage
+  - [charlie] Implement MessageComplete hook for turn tracking and usage
     - [ ] Extract token usage from `message.usage` (input_tokens, output_tokens)
     - [ ] Track turn count per session (increment on each message)
     - [ ] Update span with cumulative token usage
