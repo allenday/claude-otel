@@ -12,6 +12,7 @@ These hooks provide richer telemetry than CLI hooks alone, including:
 """
 
 from typing import Any, Optional
+import logging
 import time
 
 from opentelemetry import trace
@@ -42,6 +43,7 @@ class SDKTelemetryHooks:
         tracer: Optional[trace.Tracer] = None,
         tracer_name: str = "claude-otel-sdk",
         create_tool_spans: bool = True,
+        logger: Optional[logging.Logger] = None,
     ):
         """Initialize SDK hooks with a tracer.
 
@@ -50,9 +52,11 @@ class SDKTelemetryHooks:
             tracer_name: Name for the OpenTelemetry tracer (used if tracer is None)
             create_tool_spans: If True, create child spans for each tool.
                               If False, add tool data as events only.
+            logger: Optional logger for OTEL logging (emits per-tool logs to Loki)
         """
         self.config = get_config()
         self.tracer = tracer if tracer is not None else trace.get_tracer(tracer_name, "0.1.0")
+        self.logger = logger
         self.session_span: Optional[trace.Span] = None
         self.tool_spans: dict[str, trace.Span] = {}
         self.tool_start_times: dict[str, float] = {}
@@ -312,6 +316,38 @@ class SDKTelemetryHooks:
 
         # Record metric
         metrics.record_tool_call(tool_name, duration_ms, has_error)
+
+        # Emit per-tool-call log for Loki/Grafana charting
+        if self.logger:
+            # Extract additional metadata for logging
+            log_extra = {
+                "tool.name": tool_name,
+                "tool.duration_ms": duration_ms,
+                "tool.status": "error" if has_error else "success",
+            }
+
+            # Add session ID if available
+            if self.session_span and hasattr(self.session_span, "context"):
+                log_extra["session.id"] = self.session_span.context.span_id
+
+            # Add error information if present
+            if has_error and isinstance(tool_response, dict):
+                if "error" in tool_response:
+                    log_extra["tool.error"] = str(tool_response["error"])[:200]
+                elif "isError" in tool_response:
+                    log_extra["tool.error"] = "Tool execution failed"
+
+            # Log with info level for success, warning for errors
+            if has_error:
+                self.logger.warning(
+                    f"Tool call failed: {tool_name}",
+                    extra=log_extra,
+                )
+            else:
+                self.logger.info(
+                    f"Tool call completed: {tool_name}",
+                    extra=log_extra,
+                )
 
         # Rich console output
         completion_title = create_completion_title(tool_name, tool_response)

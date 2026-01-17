@@ -19,16 +19,20 @@ from claude_otel.config import get_config, OTelConfig
 from claude_otel.sdk_hooks import SDKTelemetryHooks
 
 
-def setup_sdk_hooks(tracer: trace.Tracer) -> tuple[SDKTelemetryHooks, dict]:
+def setup_sdk_hooks(
+    tracer: trace.Tracer,
+    logger: Optional[logging.Logger] = None,
+) -> tuple[SDKTelemetryHooks, dict]:
     """Initialize SDK hooks and create hook configuration for ClaudeAgentOptions.
 
     Args:
         tracer: OpenTelemetry tracer to use for spans
+        logger: Optional logger for OTEL logging (emits per-tool logs)
 
     Returns:
         Tuple of (hooks instance, hook_config dict for SDK)
     """
-    hooks = SDKTelemetryHooks(tracer=tracer)
+    hooks = SDKTelemetryHooks(tracer=tracer, logger=logger)
 
     hook_config = {
         "UserPromptSubmit": [
@@ -80,7 +84,7 @@ async def run_agent_with_sdk(
         raise ValueError("Tracer is required for SDK runner")
 
     # Initialize SDK hooks
-    hooks, hook_config = setup_sdk_hooks(tracer)
+    hooks, hook_config = setup_sdk_hooks(tracer, logger)
 
     # Callback for stderr output from Claude CLI
     def log_claude_stderr(line: str) -> None:
@@ -214,7 +218,7 @@ async def run_agent_interactive(
         raise ValueError("Tracer is required for SDK runner")
 
     # Initialize SDK hooks (shared across all turns)
-    hooks, hook_config = setup_sdk_hooks(tracer)
+    hooks, hook_config = setup_sdk_hooks(tracer, logger)
 
     # Session metrics tracking
     session_metrics = {

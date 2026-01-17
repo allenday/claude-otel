@@ -539,3 +539,115 @@ class TestSDKTelemetryHooks:
 
         # Should reset tool_start_times
         assert hooks.tool_start_times == {}
+
+    @pytest.mark.asyncio
+    async def test_on_post_tool_use_emits_log_when_logger_provided(self):
+        """PostToolUse should emit a log entry when logger is provided."""
+        # Create mock logger
+        mock_logger = Mock()
+
+        # Create hooks with logger
+        with patch("claude_otel.sdk_hooks.get_config") as mock_config:
+            mock_config.return_value = Mock(debug=False)
+            hooks = SDKTelemetryHooks(logger=mock_logger)
+
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        # Start and complete tool
+        tool_use_id = "tool_123"
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Read", "tool_input": {"file_path": "/test.txt"}},
+            tool_use_id,
+            None,
+        )
+
+        await hooks.on_post_tool_use(
+            {"tool_name": "Read", "tool_response": "file contents"},
+            tool_use_id,
+            None,
+        )
+
+        # Should emit info log with tool metadata
+        mock_logger.info.assert_called_once()
+        call_args = mock_logger.info.call_args
+        assert "Tool call completed: Read" in call_args[0][0]
+        assert "tool.name" in call_args[1]["extra"]
+        assert call_args[1]["extra"]["tool.name"] == "Read"
+        assert "tool.duration_ms" in call_args[1]["extra"]
+        assert "tool.status" in call_args[1]["extra"]
+        assert call_args[1]["extra"]["tool.status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_on_post_tool_use_emits_warning_log_for_errors(self):
+        """PostToolUse should emit warning log for failed tools."""
+        # Create mock logger
+        mock_logger = Mock()
+
+        # Create hooks with logger
+        with patch("claude_otel.sdk_hooks.get_config") as mock_config:
+            mock_config.return_value = Mock(debug=False)
+            hooks = SDKTelemetryHooks(logger=mock_logger)
+
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        # Start and complete tool with error
+        tool_use_id = "tool_123"
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Bash", "tool_input": {"command": "fail"}},
+            tool_use_id,
+            None,
+        )
+
+        await hooks.on_post_tool_use(
+            {"tool_name": "Bash", "tool_response": {"error": "Command failed", "isError": True}},
+            tool_use_id,
+            None,
+        )
+
+        # Should emit warning log with error metadata
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args
+        assert "Tool call failed: Bash" in call_args[0][0]
+        assert "tool.name" in call_args[1]["extra"]
+        assert call_args[1]["extra"]["tool.name"] == "Bash"
+        assert "tool.status" in call_args[1]["extra"]
+        assert call_args[1]["extra"]["tool.status"] == "error"
+        assert "tool.error" in call_args[1]["extra"]
+
+    @pytest.mark.asyncio
+    async def test_on_post_tool_use_no_log_when_logger_not_provided(self, hooks):
+        """PostToolUse should not emit logs when logger is not provided."""
+        # hooks fixture has no logger
+        assert hooks.logger is None
+
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        # Start and complete tool
+        tool_use_id = "tool_123"
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Read", "tool_input": {"file_path": "/test.txt"}},
+            tool_use_id,
+            None,
+        )
+
+        # Should not raise an error even without logger
+        await hooks.on_post_tool_use(
+            {"tool_name": "Read", "tool_response": "file contents"},
+            tool_use_id,
+            None,
+        )

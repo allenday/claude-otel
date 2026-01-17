@@ -256,7 +256,7 @@ options = ClaudeAgentOptions(
   - Record human response time (prompt-to-prompt latency)
   - Add prompt.latency_ms metric
   - Useful for understanding user interaction patterns
-- [bravo] Add per-tool-call logging
+- [x] Add per-tool-call logging
   - Emit a log per tool call from SDK hooks PostToolUse path
   - Include tool.name, duration, exit_code, tokens, and other tool metadata
   - Currently tool names aren't in any logs (SDK only logs session summary)
