@@ -27,6 +27,14 @@ _tool_errors_counter: Optional[metrics.Counter] = None
 _tool_duration_histogram: Optional[metrics.Histogram] = None
 _in_flight_gauge_value: int = 0
 
+# New metrics for enhanced observability
+_turn_counter: Optional[metrics.Counter] = None
+_cache_hits_counter: Optional[metrics.Counter] = None
+_cache_misses_counter: Optional[metrics.Counter] = None
+_cache_creations_counter: Optional[metrics.Counter] = None
+_model_requests_counter: Optional[metrics.Counter] = None
+_compaction_counter: Optional[metrics.Counter] = None
+
 
 def _create_metric_exporter(config: OTelConfig):
     """Create OTLP metric exporter based on protocol."""
@@ -111,6 +119,8 @@ def get_meter() -> Optional[metrics.Meter]:
 def _ensure_instruments():
     """Lazily initialize metric instruments."""
     global _tool_calls_counter, _tool_errors_counter, _tool_duration_histogram
+    global _turn_counter, _cache_hits_counter, _cache_misses_counter
+    global _cache_creations_counter, _model_requests_counter, _compaction_counter
 
     if _meter is None:
         return
@@ -134,6 +144,49 @@ def _ensure_instruments():
             name="claude.tool_call_duration_ms",
             description="Duration of tool calls in milliseconds",
             unit="ms",
+        )
+
+    # Enhanced observability metrics
+    if _turn_counter is None:
+        _turn_counter = _meter.create_counter(
+            name="claude.turns_total",
+            description="Total number of conversation turns",
+            unit="1",
+        )
+
+    if _cache_hits_counter is None:
+        _cache_hits_counter = _meter.create_counter(
+            name="claude.cache_hits_total",
+            description="Total number of cache hits (cache_read_input_tokens > 0)",
+            unit="1",
+        )
+
+    if _cache_misses_counter is None:
+        _cache_misses_counter = _meter.create_counter(
+            name="claude.cache_misses_total",
+            description="Total number of cache misses (cache_read_input_tokens == 0)",
+            unit="1",
+        )
+
+    if _cache_creations_counter is None:
+        _cache_creations_counter = _meter.create_counter(
+            name="claude.cache_creations_total",
+            description="Total number of cache creations (cache_creation_input_tokens > 0)",
+            unit="1",
+        )
+
+    if _model_requests_counter is None:
+        _model_requests_counter = _meter.create_counter(
+            name="claude.model_requests_total",
+            description="Total number of API requests by model",
+            unit="1",
+        )
+
+    if _compaction_counter is None:
+        _compaction_counter = _meter.create_counter(
+            name="claude.context_compactions_total",
+            description="Total number of context compaction events",
+            unit="1",
         )
 
 
@@ -186,10 +239,88 @@ def get_in_flight_count() -> int:
     return _in_flight_gauge_value
 
 
+def record_turn(model: str = "unknown"):
+    """Record a conversation turn completion.
+
+    Args:
+        model: Model used for the turn (default: "unknown").
+    """
+    _ensure_instruments()
+
+    if _turn_counter is None:
+        return
+
+    attributes = {"model": model}
+    _turn_counter.add(1, attributes)
+
+
+def record_cache_usage(
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+    model: str = "unknown",
+):
+    """Record cache hit/miss and cache creation metrics.
+
+    Args:
+        cache_read_tokens: Number of tokens read from cache.
+        cache_creation_tokens: Number of tokens created in cache.
+        model: Model used (default: "unknown").
+    """
+    _ensure_instruments()
+
+    if _cache_hits_counter is None:
+        return
+
+    attributes = {"model": model}
+
+    # Record cache hit or miss
+    if cache_read_tokens > 0:
+        _cache_hits_counter.add(1, attributes)
+    else:
+        _cache_misses_counter.add(1, attributes)
+
+    # Record cache creation
+    if cache_creation_tokens > 0:
+        _cache_creations_counter.add(1, attributes)
+
+
+def record_model_request(model: str = "unknown"):
+    """Record an API request to a specific model.
+
+    Args:
+        model: Model name (default: "unknown").
+    """
+    _ensure_instruments()
+
+    if _model_requests_counter is None:
+        return
+
+    attributes = {"model": model}
+    _model_requests_counter.add(1, attributes)
+
+
+def record_context_compaction(trigger: str = "unknown", model: str = "unknown"):
+    """Record a context compaction event.
+
+    Args:
+        trigger: What triggered the compaction (e.g., "token_limit", "user_request").
+        model: Model being used (default: "unknown").
+    """
+    _ensure_instruments()
+
+    if _compaction_counter is None:
+        return
+
+    attributes = {"trigger": trigger, "model": model}
+    _compaction_counter.add(1, attributes)
+
+
 def shutdown_metrics():
     """Shutdown the meter provider and flush pending metrics."""
     global _meter_provider, _meter, _tool_calls_counter, _tool_errors_counter
     global _tool_duration_histogram, _in_flight_gauge_value
+    global _turn_counter, _cache_hits_counter, _cache_misses_counter
+    global _cache_creations_counter, _model_requests_counter, _compaction_counter
 
     if _meter_provider is not None:
         _meter_provider.shutdown()
@@ -200,3 +331,9 @@ def shutdown_metrics():
     _tool_errors_counter = None
     _tool_duration_histogram = None
     _in_flight_gauge_value = 0
+    _turn_counter = None
+    _cache_hits_counter = None
+    _cache_misses_counter = None
+    _cache_creations_counter = None
+    _model_requests_counter = None
+    _compaction_counter = None

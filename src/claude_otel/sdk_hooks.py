@@ -23,6 +23,7 @@ from claude_otel.formatting import (
     create_completion_title,
     truncate_for_display,
 )
+from claude_otel import metrics
 
 
 class SDKTelemetryHooks:
@@ -143,6 +144,9 @@ class SDKTelemetryHooks:
 
         # Store message
         self.messages.append({"role": "user", "content": prompt})
+
+        # Record model request metric
+        metrics.record_model_request(model)
 
         # Rich console output
         if self.config.debug:
@@ -342,6 +346,11 @@ class SDKTelemetryHooks:
             self.metrics["cache_creation_input_tokens"] += cache_creation
             self.metrics["turns"] += 1
 
+            # Record metrics
+            model = self.metrics.get("model", "unknown")
+            metrics.record_turn(model)
+            metrics.record_cache_usage(cache_read, cache_creation, model)
+
             # Update span with cumulative token usage using semantic conventions
             if self.session_span:
                 # gen_ai.* semantic conventions for token usage
@@ -397,6 +406,10 @@ class SDKTelemetryHooks:
         """
         trigger = input_data.get("trigger", "unknown")
         custom_instructions = input_data.get("custom_instructions")
+
+        # Record compaction metric
+        model = self.metrics.get("model", "unknown")
+        metrics.record_context_compaction(trigger, model)
 
         if self.session_span:
             self.session_span.add_event(
