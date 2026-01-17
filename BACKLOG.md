@@ -204,10 +204,10 @@ options = ClaudeAgentOptions(
   - [x] CLI arg parsing tests
   - [x] Turn tracking tests
   - [x] Interactive mode tests
-- [ ] Update documentation
+- [x] Update documentation
   - [x] Document new metrics (gen_ai.*, turns, model)
   - [x] Document CLI flags and interactive mode
-  - [alpha] Add examples for SDK-based usage
+  - [x] Add examples for SDK-based usage
   - [x] Update troubleshooting guide
 - [x] Create migration guide
   - [x] Document differences between subprocess and SDK modes
