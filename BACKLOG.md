@@ -156,7 +156,7 @@ options = ClaudeAgentOptions(
 
 - [ ] Add SDK-based hooks for richer telemetry (requires SDK runner)
   - [bravo] Implement UserPromptSubmit hook to capture prompt and model
-  - [charlie] Implement MessageComplete hook scaffold (parent task - see sub-tasks below)
+  - [x] Implement MessageComplete hook scaffold (parent task - broken down into sub-tasks below)
   - [alpha] Implement PreCompact hook for context window tracking
   - [ ] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
 
