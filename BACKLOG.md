@@ -160,11 +160,11 @@ options = ClaudeAgentOptions(
   - [x] Add turn events with incremental token counts
   - [x] Add `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` attributes
   - [x] Store message history for session context
-- [alpha] Add SDK-based runner alongside subprocess wrapper
-  - [ ] Implement SDK-based runner in `src/claude_otel/sdk_runner.py`
-  - [ ] Create SDK hook manager to bridge SDK callbacks to OTEL spans
-  - [ ] Add `--use-sdk` flag to `claude-otel` CLI for opt-in SDK mode
-  - [ ] Maintain backward compatibility with subprocess wrapper (default)
+- [x] Add SDK-based runner alongside subprocess wrapper
+  - [x] Implement SDK-based runner in `src/claude_otel/sdk_runner.py`
+  - [x] Create SDK hook manager to bridge SDK callbacks to OTEL spans
+  - [x] Add `--use-sdk` flag to `claude-otel` CLI for opt-in SDK mode
+  - [x] Maintain backward compatibility with subprocess wrapper (default)
 - [bravo] Enhance tool span attributes
   - [bravo] Add detailed `tool.input.*` and `tool.response.*` attributes
   - [bravo] Add `tool.status` attribute (success/error)

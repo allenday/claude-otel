@@ -33,18 +33,20 @@ class SDKTelemetryHooks:
 
     def __init__(
         self,
+        tracer: Optional[trace.Tracer] = None,
         tracer_name: str = "claude-otel-sdk",
         create_tool_spans: bool = True,
     ):
         """Initialize SDK hooks with a tracer.
 
         Args:
-            tracer_name: Name for the OpenTelemetry tracer
+            tracer: Optional OpenTelemetry tracer; if None, creates one with tracer_name
+            tracer_name: Name for the OpenTelemetry tracer (used if tracer is None)
             create_tool_spans: If True, create child spans for each tool.
                               If False, add tool data as events only.
         """
         self.config = get_config()
-        self.tracer = trace.get_tracer(tracer_name, "0.1.0")
+        self.tracer = tracer if tracer is not None else trace.get_tracer(tracer_name, "0.1.0")
         self.session_span: Optional[trace.Span] = None
         self.tool_spans: dict[str, trace.Span] = {}
 

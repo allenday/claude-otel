@@ -241,8 +241,17 @@ def main() -> int:
     """CLI entry point."""
     config = get_config()
 
+    # Check for --use-sdk flag
+    args = sys.argv[1:]
+    use_sdk = False
+
+    if "--use-sdk" in args:
+        use_sdk = True
+        args.remove("--use-sdk")
+
     if config.debug:
         print("[claude-otel] Debug mode enabled", file=sys.stderr)
+        print(f"[claude-otel] Mode: {'SDK' if use_sdk else 'subprocess wrapper'}", file=sys.stderr)
         print(f"[claude-otel] Endpoint: {config.endpoint}", file=sys.stderr)
         print(f"[claude-otel] Protocol: {config.protocol}", file=sys.stderr)
         print(f"[claude-otel] Service: {config.service_name}", file=sys.stderr)
@@ -254,11 +263,27 @@ def main() -> int:
     tracer = setup_tracing(config)
     logger, logger_provider = setup_logging(config)
 
-    # Pass all CLI arguments to Claude
-    args = sys.argv[1:]
-
     try:
-        return run_claude(args, tracer, logger)
+        if use_sdk:
+            # Use SDK-based runner for richer telemetry
+            from claude_otel.sdk_runner import run_agent_with_sdk_sync
+
+            # Parse args into prompt and extra_args
+            prompt = " ".join(args) if args else None
+            if not prompt:
+                print("[claude-otel] Error: No prompt provided", file=sys.stderr)
+                return 1
+
+            return run_agent_with_sdk_sync(
+                prompt=prompt,
+                extra_args={},  # Could be extended to parse Claude CLI flags
+                config=config,
+                tracer=tracer,
+                logger=logger,
+            )
+        else:
+            # Use subprocess wrapper (default)
+            return run_claude(args, tracer, logger)
     finally:
         if logger_provider:
             logger_provider.shutdown()
