@@ -242,7 +242,7 @@ options = ClaudeAgentOptions(
   - Record session start/end times
   - Add session.duration_ms span attribute
   - Log session duration on completion
-- [charlie] Add tool-call duration tracking
+- [x] Add tool-call duration tracking
   - Record tool start/end times in SDK hooks
   - Add tool.duration_ms attribute to tool spans
   - Include in tool metrics

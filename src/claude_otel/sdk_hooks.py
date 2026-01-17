@@ -55,6 +55,7 @@ class SDKTelemetryHooks:
         self.tracer = tracer if tracer is not None else trace.get_tracer(tracer_name, "0.1.0")
         self.session_span: Optional[trace.Span] = None
         self.tool_spans: dict[str, trace.Span] = {}
+        self.tool_start_times: dict[str, float] = {}
 
         # Initialize metrics tracking
         self.metrics = {
@@ -182,6 +183,10 @@ class SDKTelemetryHooks:
         self.tools_used.append(tool_name)
         self.metrics["tools_used"] += 1
 
+        # Record start time for duration tracking
+        span_id = tool_use_id or f"{tool_name}_{time.time_ns()}"
+        self.tool_start_times[span_id] = time.time()
+
         # Rich console output
         tool_title = create_tool_title(tool_name, tool_input)
         if self.config.debug:
@@ -205,8 +210,7 @@ class SDKTelemetryHooks:
                 tool_span.set_attribute("tool.input", input_str)
                 tool_span.add_event("tool.started", {"input": input_str})
 
-            # Store span
-            span_id = tool_use_id or f"{tool_name}_{time.time_ns()}"
+            # Store span (reuse span_id from above)
             self.tool_spans[span_id] = tool_span
         else:
             # Just add event to session span
@@ -239,11 +243,31 @@ class SDKTelemetryHooks:
         if not self.create_tool_spans:
             # No child spans - add response data as event to session span
             if self.session_span:
+                # Calculate duration for event
+                span_id = tool_use_id or f"{tool_name}_{time.time_ns()}"
+                duration_ms = 0.0
+                if span_id in self.tool_start_times:
+                    start_time = self.tool_start_times[span_id]
+                    duration_ms = (time.time() - start_time) * 1000
+                    del self.tool_start_times[span_id]
+
+                # Determine error status for metrics
+                has_error = False
+                if isinstance(tool_response, dict):
+                    if "error" in tool_response and tool_response["error"]:
+                        has_error = True
+                    elif "isError" in tool_response and tool_response["isError"]:
+                        has_error = True
+
+                # Record metric
+                metrics.record_tool_call(tool_name, duration_ms, has_error)
+
                 self.session_span.add_event(
                     f"tool.completed: {tool_name}",
                     {
                         "tool.name": tool_name,
                         "tool.response": str(tool_response)[:500],
+                        "duration_ms": duration_ms,
                     },
                 )
             return {}
@@ -268,6 +292,16 @@ class SDKTelemetryHooks:
                 print(f"[claude-otel-sdk] Warning: No span found for tool: {tool_name}")
             return {}
 
+        # Calculate duration
+        duration_ms = 0.0
+        if span_id and span_id in self.tool_start_times:
+            start_time = self.tool_start_times[span_id]
+            duration_ms = (time.time() - start_time) * 1000  # Convert to milliseconds
+            span.set_attribute("tool.duration_ms", duration_ms)
+            span.set_attribute("duration_ms", duration_ms)
+            # Clean up start time
+            del self.tool_start_times[span_id]
+
         # Determine error status
         has_error = False
         if isinstance(tool_response, dict):
@@ -275,6 +309,9 @@ class SDKTelemetryHooks:
                 has_error = True
             elif "isError" in tool_response and tool_response["isError"]:
                 has_error = True
+
+        # Record metric
+        metrics.record_tool_call(tool_name, duration_ms, has_error)
 
         # Rich console output
         completion_title = create_completion_title(tool_name, tool_response)
@@ -467,6 +504,7 @@ class SDKTelemetryHooks:
         # Reset state
         self.session_span = None
         self.tool_spans = {}
+        self.tool_start_times = {}
         self.metrics = {}
         self.messages = []
         self.tools_used = []

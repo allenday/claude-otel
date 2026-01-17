@@ -360,3 +360,182 @@ class TestSDKTelemetryHooks:
         # Duration should be > 0 and reasonable (less than 1 second for this test)
         assert duration_ms > 0
         assert duration_ms < 1000
+
+    @pytest.mark.asyncio
+    async def test_on_pre_tool_use_records_start_time(self, hooks):
+        """PreToolUse should record start time for duration tracking."""
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        input_data = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls"},
+        }
+        tool_use_id = "tool_123"
+
+        result = await hooks.on_pre_tool_use(input_data, tool_use_id, None)
+
+        assert result == {}
+        # Should record start time
+        assert tool_use_id in hooks.tool_start_times
+        assert isinstance(hooks.tool_start_times[tool_use_id], float)
+
+    @pytest.mark.asyncio
+    async def test_on_post_tool_use_calculates_duration(self, hooks):
+        """PostToolUse should calculate duration and add to span."""
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        # Start tool (records start time)
+        tool_use_id = "tool_123"
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Bash", "tool_input": {"command": "ls"}},
+            tool_use_id,
+            None,
+        )
+
+        # Simulate some delay
+        time.sleep(0.01)  # 10ms
+
+        # Complete tool
+        input_data = {
+            "tool_name": "Bash",
+            "tool_response": {"stdout": "file1.txt\nfile2.txt"},
+        }
+
+        with patch.object(hooks.tool_spans[tool_use_id], "set_attribute") as mock_set_attr:
+            result = await hooks.on_post_tool_use(input_data, tool_use_id, None)
+
+            assert result == {}
+            # Should have set duration attributes
+            duration_calls = [
+                call for call in mock_set_attr.call_args_list
+                if "duration_ms" in str(call)
+            ]
+            assert len(duration_calls) >= 2  # tool.duration_ms and duration_ms
+
+            # Duration should be > 0 (we slept for 10ms)
+            for call in duration_calls:
+                if call[0][0] in ("tool.duration_ms", "duration_ms"):
+                    duration = call[0][1]
+                    assert duration > 0
+
+    @pytest.mark.asyncio
+    async def test_on_post_tool_use_cleans_up_start_time(self, hooks):
+        """PostToolUse should clean up start time after calculation."""
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        # Start and complete tool
+        tool_use_id = "tool_123"
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Bash", "tool_input": {"command": "ls"}},
+            tool_use_id,
+            None,
+        )
+
+        assert tool_use_id in hooks.tool_start_times
+
+        await hooks.on_post_tool_use(
+            {"tool_name": "Bash", "tool_response": {"stdout": "output"}},
+            tool_use_id,
+            None,
+        )
+
+        # Start time should be cleaned up
+        assert tool_use_id not in hooks.tool_start_times
+
+    @pytest.mark.asyncio
+    async def test_on_post_tool_use_records_metric(self, hooks):
+        """PostToolUse should record tool call metric with duration."""
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        # Start tool
+        tool_use_id = "tool_123"
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Read", "tool_input": {"file_path": "/test.txt"}},
+            tool_use_id,
+            None,
+        )
+
+        # Complete tool
+        with patch("claude_otel.sdk_hooks.metrics.record_tool_call") as mock_record:
+            await hooks.on_post_tool_use(
+                {"tool_name": "Read", "tool_response": "file contents"},
+                tool_use_id,
+                None,
+            )
+
+            # Should record metric with tool name, duration, and error status
+            mock_record.assert_called_once()
+            args = mock_record.call_args[0]
+            assert args[0] == "Read"  # tool_name
+            assert isinstance(args[1], float)  # duration_ms
+            assert args[1] >= 0  # duration should be non-negative
+            assert args[2] is False  # has_error
+
+    @pytest.mark.asyncio
+    async def test_on_post_tool_use_records_error_metric(self, hooks):
+        """PostToolUse should record error metric for failed tools."""
+        # Initialize session
+        await hooks.on_user_prompt_submit(
+            {"prompt": "test", "session_id": "s1"},
+            None,
+            {"options": {"model": "claude-opus-4"}},
+        )
+
+        # Start tool
+        tool_use_id = "tool_456"
+        await hooks.on_pre_tool_use(
+            {"tool_name": "Bash", "tool_input": {"command": "invalid"}},
+            tool_use_id,
+            None,
+        )
+
+        # Complete tool with error
+        with patch("claude_otel.sdk_hooks.metrics.record_tool_call") as mock_record:
+            await hooks.on_post_tool_use(
+                {
+                    "tool_name": "Bash",
+                    "tool_response": {"error": "Command not found", "isError": True},
+                },
+                tool_use_id,
+                None,
+            )
+
+            # Should record metric with error=True
+            mock_record.assert_called_once()
+            args = mock_record.call_args[0]
+            assert args[0] == "Bash"
+            assert args[2] is True  # has_error
+
+    @pytest.mark.asyncio
+    async def test_complete_session_resets_tool_start_times(self, hooks):
+        """complete_session should reset tool start times."""
+        # Set up state
+        hooks.session_span = Mock()
+        hooks.metrics = {"model": "test", "start_time": time.time(), "tools_used": 0}
+        hooks.tools_used = []
+        hooks.tool_start_times = {"tool_1": time.time(), "tool_2": time.time()}
+
+        hooks.complete_session()
+
+        # Should reset tool_start_times
+        assert hooks.tool_start_times == {}
