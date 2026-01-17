@@ -1008,7 +1008,8 @@ class TestSDKSessionCompletion:
             calls = {call[0][0]: call[0][1] for call in mock_span.set_attribute.call_args_list}
             assert calls["gen_ai.response.model"] == "sonnet"
             assert calls["tools_used"] == 3
-            assert calls["tool_names"] == "Bash,Read"
+            # Tool names should contain both Bash and Read (order not guaranteed due to set)
+            assert set(calls["tool_names"].split(",")) == {"Bash", "Read"}
 
             # Verify event and span end
             event_calls = [call[0][0] for call in mock_span.add_event.call_args_list]
