@@ -27,7 +27,7 @@ Package configuration lives in `pyproject.toml`.
   - Smoke test script added: `tests/smoke_test.py`
   - Traces and metrics accepted by OTLP collector at 4317 ✓
   - Note: Loki shows only promtail (span-to-logs processor not configured); Prometheus doesn't expose OTLP metrics directly. Both require collector config changes (see optional task below).
-- [ ] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested).
+- [charlie] Optional: add a span-to-logs processor on collector if traces need to surface in Loki (only if requested).
 
 ## Milestone 3: Enhancements (Optional)
 - [x] Add per-tool metrics labels (tool.name) for Prometheus counters.
