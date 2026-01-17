@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import subprocess
+import time
 import uuid
 from typing import Optional
 
@@ -160,6 +161,7 @@ def run_claude(args: list[str], tracer: trace.Tracer, logger: Optional[logging.L
     claude_bin = os.environ.get("CLAUDE_BIN", "claude")
     session_id = str(uuid.uuid4())
     preview = None
+    session_start_time = time.time()
 
     with tracer.start_as_current_span("claude-session") as span:
         span.set_attribute("session.id", session_id)
@@ -192,6 +194,10 @@ def run_claude(args: list[str], tracer: trace.Tracer, logger: Optional[logging.L
 
             span.set_attribute("exit_code", result.returncode)
 
+            # Calculate and record session duration
+            session_duration_ms = (time.time() - session_start_time) * 1000
+            span.set_attribute("session.duration_ms", session_duration_ms)
+
             if result.returncode != 0:
                 span.set_status(Status(StatusCode.ERROR, f"Exit code: {result.returncode}"))
             else:
@@ -203,24 +209,36 @@ def run_claude(args: list[str], tracer: trace.Tracer, logger: Optional[logging.L
                     extra={
                         "session_id": session_id,
                         "exit_code": result.returncode,
+                        "session.duration_ms": session_duration_ms,
                     },
                 )
 
             return result.returncode
 
         except FileNotFoundError:
+            # Calculate and record session duration
+            session_duration_ms = (time.time() - session_start_time) * 1000
+            span.set_attribute("session.duration_ms", session_duration_ms)
+
             span.set_status(Status(StatusCode.ERROR, "Claude CLI not found"))
             span.set_attribute("error", True)
             span.set_attribute("error.message", "Claude CLI not found in PATH")
             if logger:
                 logger.error(
                     "claude CLI not found",
-                    extra={"session_id": session_id},
+                    extra={
+                        "session_id": session_id,
+                        "session.duration_ms": session_duration_ms,
+                    },
                 )
             print("[claude-otel] Error: 'claude' command not found in PATH", file=sys.stderr)
             return 1
 
         except Exception as e:
+            # Calculate and record session duration
+            session_duration_ms = (time.time() - session_start_time) * 1000
+            span.set_attribute("session.duration_ms", session_duration_ms)
+
             span.set_status(Status(StatusCode.ERROR, str(e)))
             span.set_attribute("error", True)
             error_msg, _ = sanitize_attribute(str(e), max_length=500)
@@ -231,6 +249,7 @@ def run_claude(args: list[str], tracer: trace.Tracer, logger: Optional[logging.L
                     extra={
                         "session_id": session_id,
                         "error_message": error_msg,
+                        "session.duration_ms": session_duration_ms,
                     },
                 )
             print(f"[claude-otel] Error: {e}", file=sys.stderr)

@@ -429,6 +429,10 @@ class SDKTelemetryHooks:
                 print("[claude-otel-sdk] Warning: No active session span")
             return
 
+        # Calculate and record session duration
+        session_duration_ms = (time.time() - self.metrics.get("start_time", 0)) * 1000
+        self.session_span.set_attribute("session.duration_ms", session_duration_ms)
+
         # Set final attributes with semantic conventions
         self.session_span.set_attribute("gen_ai.response.model", self.metrics["model"])
         self.session_span.set_attribute("tools_used", self.metrics["tools_used"])

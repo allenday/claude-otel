@@ -333,3 +333,30 @@ class TestSDKTelemetryHooks:
         assert hooks.metrics == {}
         assert hooks.messages == []
         assert hooks.tools_used == []
+
+    def test_complete_session_sets_duration_attribute(self, hooks):
+        """complete_session should set session.duration_ms attribute."""
+        # Set up mock span with initialized metrics
+        mock_span = Mock()
+        hooks.session_span = mock_span
+        start_time = time.time()
+        hooks.metrics = {
+            "model": "claude-opus-4",
+            "start_time": start_time,
+            "tools_used": 0,
+        }
+        hooks.tools_used = []
+
+        # Wait a bit to ensure duration > 0
+        time.sleep(0.01)
+
+        hooks.complete_session()
+
+        # Should set session.duration_ms attribute
+        set_attribute_calls = [call for call in mock_span.set_attribute.call_args_list
+                               if call[0][0] == "session.duration_ms"]
+        assert len(set_attribute_calls) == 1
+        duration_ms = set_attribute_calls[0][0][1]
+        # Duration should be > 0 and reasonable (less than 1 second for this test)
+        assert duration_ms > 0
+        assert duration_ms < 1000

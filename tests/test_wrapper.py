@@ -273,3 +273,20 @@ class TestRunClaude:
         assert span.end_time is not None
         assert span.start_time is not None
         assert span.end_time >= span.start_time
+
+    def test_span_has_duration_ms_attribute(self):
+        """Session span should have session.duration_ms attribute."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            import time
+            time.sleep(0.01)  # Ensure some duration
+            run_claude([], self.tracer, None)
+
+        spans = self.exporter.get_finished_spans()
+        attrs = dict(spans[0].attributes)
+        # Should have session.duration_ms attribute
+        assert "session.duration_ms" in attrs
+        duration_ms = attrs["session.duration_ms"]
+        # Duration should be > 0 and reasonable (less than 1 second for this test)
+        assert duration_ms > 0
+        assert duration_ms < 1000
