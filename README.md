@@ -45,8 +45,8 @@ CLAUDE_OTEL_DEBUG=1 claude-otel "Hello"
 |----------|---------|-------------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | Protocol: `grpc` or `http` |
-| `OTEL_SERVICE_NAME` | `claude-cli` | Service name for traces/logs |
-| `OTEL_SERVICE_NAMESPACE` | `claude-otel` | Service namespace |
+| `OTEL_SERVICE_NAME` | `claude-otel` | Service name for traces/logs |
+| `OTEL_SERVICE_NAMESPACE` | `infra` | Service namespace |
 | `OTEL_RESOURCE_ATTRIBUTES` | (empty) | Additional attributes as `key=value,key2=value2` |
 
 ### Exporter Toggles
@@ -119,8 +119,8 @@ claude-otel "Hello"
 ### Custom Service Identity
 
 ```bash
-export OTEL_SERVICE_NAME="my-app-claude"
-export OTEL_SERVICE_NAMESPACE="production"
+export OTEL_SERVICE_NAME="claude-otel"
+export OTEL_SERVICE_NAMESPACE="infra"
 export OTEL_RESOURCE_ATTRIBUTES="environment=prod,team=platform"
 claude-otel "Hello"
 ```
@@ -141,13 +141,13 @@ OTEL_EXPORTER_OTLP_PROTOCOL=grpc \
 OTEL_TRACES_EXPORTER=otlp \
 OTEL_LOGS_EXPORTER=otlp \
 OTEL_METRICS_EXPORTER=otlp \
-OTEL_SERVICE_NAME="claude-cli" \
-OTEL_RESOURCE_ATTRIBUTES="service.namespace=example" \
+OTEL_SERVICE_NAME="claude-otel" \
+OTEL_RESOURCE_ATTRIBUTES="service.namespace=infra" \
 CLAUDE_TELEMETRY_DEBUG=1 \
 claude-otel -p "hello"
 ```
 
-You should see logs in Loki under `service_name="example/claude-cli"`. Ensure `/root/.claude/debug` (Claude CLI debug dir) is writable if running as root.
+You should see logs in Loki under `service_name="infra/claude-otel"`. Ensure `/root/.claude/debug` (Claude CLI debug dir) is writable if running as root.
 
 ## Troubleshooting
 
@@ -199,7 +199,7 @@ which claude
 
 3. Verify service name in collector query:
    ```bash
-   # Default service name is 'claude-cli'
+   # Default service name is 'claude-otel'
    # Check your OTEL_SERVICE_NAME if customized
    ```
 

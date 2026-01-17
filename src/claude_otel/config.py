@@ -3,8 +3,8 @@
 Supported environment variables (per PRD):
   OTEL_EXPORTER_OTLP_ENDPOINT   - Collector endpoint (default: http://localhost:4317)
   OTEL_EXPORTER_OTLP_PROTOCOL   - Protocol: grpc or http (default: grpc)
-  OTEL_SERVICE_NAME             - Service name (default: claude-cli)
-  OTEL_SERVICE_NAMESPACE        - Service namespace (default: claude-otel)
+  OTEL_SERVICE_NAME             - Service name (default: claude-otel)
+  OTEL_SERVICE_NAMESPACE        - Service namespace (default: infra)
   OTEL_RESOURCE_ATTRIBUTES      - Comma-separated key=value pairs
   OTEL_TRACES_EXPORTER          - Exporter type: otlp or none (default: otlp)
   OTEL_LOGS_EXPORTER            - Exporter type: otlp or none (default: otlp)
@@ -37,8 +37,9 @@ from typing import Any, Optional
 # Default collector endpoint (override in env per deployment)
 DEFAULT_ENDPOINT = "http://localhost:4317"
 DEFAULT_PROTOCOL = "grpc"
-DEFAULT_SERVICE_NAME = "claude-cli"
-DEFAULT_SERVICE_NAMESPACE = "claude-otel"
+# Defaults aligned with infra dashboards/log queries
+DEFAULT_SERVICE_NAME = "claude-otel"
+DEFAULT_SERVICE_NAMESPACE = "infra"
 
 # Resilience defaults - tuned for graceful degradation when collector is unreachable
 DEFAULT_BSP_MAX_QUEUE_SIZE = 2048       # Max spans to buffer before dropping

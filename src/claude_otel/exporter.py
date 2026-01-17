@@ -6,7 +6,7 @@ Supports both gRPC (default, port 4317) and HTTP (port 4318) protocols.
 Environment variables:
     OTEL_EXPORTER_OTLP_ENDPOINT: Collector endpoint (default: http://localhost:4317)
     OTEL_EXPORTER_OTLP_PROTOCOL: Protocol - 'grpc' (default) or 'http/protobuf'
-    OTEL_SERVICE_NAME: Service name for resource attributes (default: claude-cli)
+    OTEL_SERVICE_NAME: Service name for resource attributes (default: claude-otel)
     OTEL_RESOURCE_ATTRIBUTES: Additional resource attributes as key=value,key2=value2
     OTEL_TRACES_EXPORTER: Trace exporter type - 'otlp' (default) or 'none'
     OTEL_LOGS_EXPORTER: Logs exporter type - 'otlp' (default) or 'none'
@@ -34,7 +34,7 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
 # Default collector endpoint
 DEFAULT_ENDPOINT = "http://localhost:4317"
-DEFAULT_SERVICE_NAME = "claude-cli"
+DEFAULT_SERVICE_NAME = "claude-otel"
 DEFAULT_PROTOCOL = "grpc"
 
 # Resilience defaults

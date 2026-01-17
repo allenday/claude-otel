@@ -30,8 +30,8 @@ except ImportError:
 
 # Default configuration
 DEFAULT_ENDPOINT = "http://localhost:4317"
-DEFAULT_SERVICE_NAME = "claude-cli"
-DEFAULT_SERVICE_NAMESPACE = "claude-otel"
+DEFAULT_SERVICE_NAME = "claude-otel"
+DEFAULT_SERVICE_NAMESPACE = "infra"
 DEFAULT_MAX_ATTR_LENGTH = 256
 DEFAULT_MAX_PAYLOAD_BYTES = 1024
 
