@@ -171,7 +171,7 @@ options = ClaudeAgentOptions(
   - [x] Improve error detection and `tool.error` messaging
 
 #### Phase 2: CLI & Args Enhancement
-- [ ] Implement rich CLI with arg parsing (like `claudia`)
+- [alpha] Implement rich CLI with arg parsing (like `claudia`)
   - [ ] Add Typer-based CLI with `--help`, `--version`, `--config` flags
   - [ ] Implement `parse_claude_args()` to separate prompt from flags
   - [ ] Support both `--flag=value` and `--flag value` formats
