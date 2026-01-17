@@ -156,15 +156,17 @@ options = ClaudeAgentOptions(
 
 - [ ] Add SDK-based hooks for richer telemetry (requires SDK runner)
   - [bravo] Implement UserPromptSubmit hook to capture prompt and model
-  - [charlie] Implement MessageComplete hook for turn tracking and usage
-    - [ ] Extract token usage from `message.usage` (input_tokens, output_tokens)
-    - [ ] Track turn count per session (increment on each message)
-    - [ ] Update span with cumulative token usage
-    - [ ] Add turn events with incremental token counts
-    - [ ] Add `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` attributes
-    - [ ] Store message history for session context
+  - [charlie] Implement MessageComplete hook scaffold (parent task - see sub-tasks below)
   - [alpha] Implement PreCompact hook for context window tracking
   - [ ] Add `gen_ai.*` semantic convention attributes (gen_ai.system, gen_ai.request.model, gen_ai.response.model, gen_ai.operation.name)
+
+**MessageComplete Hook Sub-Tasks (spawned from parent task):**
+- [ ] MessageComplete: Extract token usage from `message.usage` (input_tokens, output_tokens)
+- [ ] MessageComplete: Track turn count per session (increment on each message)
+- [ ] MessageComplete: Update span with cumulative token usage
+- [ ] MessageComplete: Add turn events with incremental token counts
+- [ ] MessageComplete: Add `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` attributes
+- [ ] MessageComplete: Store message history for session context
 - [ ] Enhance tool span attributes
   - [ ] Add detailed `tool.input.*` and `tool.response.*` attributes
   - [ ] Add `tool.status` attribute (success/error)
