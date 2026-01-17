@@ -188,11 +188,11 @@ options = ClaudeAgentOptions(
   - [x] Smart truncation for tool inputs/outputs
   - [x] Formatted panels for responses (Rich library)
   - [x] Tool execution logging with structured display
-- [ ] Improve metrics export
-  - [ ] Add turn count metric
-  - [ ] Add cache hit/miss metrics
-  - [ ] Add model usage distribution
-  - [ ] Add context compaction frequency
+- [alpha] Improve metrics export
+  - [alpha] Add turn count metric
+  - [alpha] Add cache hit/miss metrics
+  - [alpha] Add model usage distribution
+  - [alpha] Add context compaction frequency
 - [ ] Add backend-specific adapters (optional)
   - [ ] Logfire adapter with LLM UI formatting
   - [ ] Sentry adapter with AI monitoring attributes
