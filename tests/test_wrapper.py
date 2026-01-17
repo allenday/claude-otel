@@ -128,7 +128,7 @@ class TestRunClaude:
         """run_claude should create a session span."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            run_claude(["--help"], self.tracer)
+            run_claude(["--help"], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         assert len(spans) == 1
@@ -138,7 +138,7 @@ class TestRunClaude:
         """Session span should have session.id attribute."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            run_claude([], self.tracer)
+            run_claude([], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         attrs = dict(spans[0].attributes)
@@ -150,7 +150,7 @@ class TestRunClaude:
         """Session span should have claude.args_count attribute."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            run_claude(["arg1", "arg2", "arg3"], self.tracer)
+            run_claude(["arg1", "arg2", "arg3"], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         attrs = dict(spans[0].attributes)
@@ -160,7 +160,7 @@ class TestRunClaude:
         """Session span should have claude.args_preview attribute."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            run_claude(["--model", "opus"], self.tracer)
+            run_claude(["--model", "opus"], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         attrs = dict(spans[0].attributes)
@@ -172,7 +172,7 @@ class TestRunClaude:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             long_args = ["x" * 200]
-            run_claude(long_args, self.tracer)
+            run_claude(long_args, self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         attrs = dict(spans[0].attributes)
@@ -182,7 +182,7 @@ class TestRunClaude:
         """Session span should have exit_code attribute on success."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            run_claude([], self.tracer)
+            run_claude([], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         attrs = dict(spans[0].attributes)
@@ -192,7 +192,7 @@ class TestRunClaude:
         """Session span should have OK status on success."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            run_claude([], self.tracer)
+            run_claude([], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         assert spans[0].status.status_code == StatusCode.OK
@@ -201,7 +201,7 @@ class TestRunClaude:
         """Session span should have exit_code attribute on failure."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1)
-            run_claude([], self.tracer)
+            run_claude([], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         attrs = dict(spans[0].attributes)
@@ -211,7 +211,7 @@ class TestRunClaude:
         """Session span should have ERROR status on non-zero exit."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1)
-            run_claude([], self.tracer)
+            run_claude([], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         assert spans[0].status.status_code == StatusCode.ERROR
@@ -220,7 +220,7 @@ class TestRunClaude:
         """run_claude should return the subprocess exit code."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=42)
-            result = run_claude([], self.tracer)
+            result = run_claude([], self.tracer, None)
 
         assert result == 42
 
@@ -229,7 +229,7 @@ class TestRunClaude:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError("claude not found")
             with patch("sys.stderr"):
-                result = run_claude([], self.tracer)
+                result = run_claude([], self.tracer, None)
 
         assert result == 1
         spans = self.exporter.get_finished_spans()
@@ -242,7 +242,7 @@ class TestRunClaude:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = RuntimeError("Something went wrong")
             with patch("sys.stderr"):
-                result = run_claude([], self.tracer)
+                result = run_claude([], self.tracer, None)
 
         assert result == 1
         spans = self.exporter.get_finished_spans()
@@ -255,7 +255,7 @@ class TestRunClaude:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = RuntimeError("x" * 1000)
             with patch("sys.stderr"):
-                run_claude([], self.tracer)
+                run_claude([], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         attrs = dict(spans[0].attributes)
@@ -265,7 +265,7 @@ class TestRunClaude:
         """Session span should have start and end time (duration)."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
-            run_claude([], self.tracer)
+            run_claude([], self.tracer, None)
 
         spans = self.exporter.get_finished_spans()
         span = spans[0]

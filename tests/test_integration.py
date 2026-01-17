@@ -19,6 +19,7 @@ import time
 import uuid
 import logging
 import pytest
+from unittest.mock import patch
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -155,9 +156,14 @@ class TestConfigIntegration:
 
     def test_default_endpoint_is_localhost(self):
         """Default endpoint should be the localhost collector."""
-        config = load_config()
-        assert "localhost" in config.endpoint
-        assert "4317" in config.endpoint
+        with patch.dict(os.environ, {}, clear=False):
+            # Clear OTEL_EXPORTER_OTLP_ENDPOINT to test the actual default
+            if "OTEL_EXPORTER_OTLP_ENDPOINT" in os.environ:
+                del os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]
+            reset_config()
+            config = load_config()
+            assert "localhost" in config.endpoint
+            assert "4317" in config.endpoint
 
     def test_default_protocol_is_grpc(self):
         """Default protocol should be gRPC."""

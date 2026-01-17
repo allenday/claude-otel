@@ -224,9 +224,9 @@ options = ClaudeAgentOptions(
 5. **Documentation:** Clear guidance on when to use each approach
 
 ### Success Criteria
-- [bravo] All metrics from claude_telemetry available in claude-otel
-- [bravo] Full args passthrough via both subprocess and SDK modes
-- [bravo] Interactive mode functional with session tracking
-- [bravo] Rich console output with formatting
-- [bravo] Tests passing for all new features
-- [bravo] Documentation updated and examples provided
+- [x] All metrics from claude_telemetry available in claude-otel
+- [x] Full args passthrough via both subprocess and SDK modes
+- [x] Interactive mode functional with session tracking
+- [x] Rich console output with formatting
+- [x] Tests passing for all new features
+- [x] Documentation updated and examples provided
