@@ -206,7 +206,7 @@ options = ClaudeAgentOptions(
   - [x] Interactive mode tests
 - [bravo] Update documentation
   - [x] Document new metrics (gen_ai.*, turns, model)
-  - [charlie] Document CLI flags and interactive mode
+  - [x] Document CLI flags and interactive mode
   - [alpha] Add examples for SDK-based usage
   - [ ] Update troubleshooting guide
 - [x] Create migration guide
