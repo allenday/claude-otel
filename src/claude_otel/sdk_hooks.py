@@ -99,7 +99,7 @@ class SDKTelemetryHooks:
         """
         # Extract prompt from input
         prompt = input_data.get("prompt", "")
-        session_id = input_data.get("session_id", "")
+        session_id = str(input_data.get("session_id", "")) if input_data.get("session_id", "") is not None else ""
 
         # Extract model from context - handle both dict and object contexts
         model = "unknown"
@@ -328,7 +328,7 @@ class SDKTelemetryHooks:
 
             # Add session ID if available
             if self.session_span and hasattr(self.session_span, "context"):
-                log_extra["session.id"] = self.session_span.context.span_id
+                log_extra["session.id"] = str(self.session_span.context.span_id)
 
             # Add error information if present
             if has_error and isinstance(tool_response, dict):
