@@ -2,14 +2,12 @@
 
 import json
 import os
+import subprocess
 import tempfile
 import pytest
 
 # Import the hook module functions directly
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "hooks"))
-
-from post_tool import (
+from claude_otel.hooks.post_tool import (
     extract_token_usage,
     truncate,
     get_input_summary,
@@ -320,3 +318,68 @@ class TestCalculatePayloadSize:
         # The function tries to serialize, which may fail or succeed
         result = calculate_payload_size(None)
         assert result >= 0  # Either 0 or "null" serialized
+
+
+class TestPreCompactHook:
+    """Tests for PreCompact hook entry point."""
+
+    def test_pre_compact_accepts_valid_input(self):
+        """PreCompact hook should accept valid compaction data."""
+        input_data = {
+            "trigger": "max_tokens",
+            "custom_instructions": "Keep important context",
+            "session_id": "session_123"
+        }
+
+        # Call the hook via subprocess
+        try:
+            result = subprocess.run(
+                ["python", "-m", "claude_otel.hooks.pre_compact"],
+                input=json.dumps(input_data),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={**os.environ, "OTEL_TRACES_EXPORTER": "none"}
+            )
+            # Should exit successfully even with traces disabled
+            assert result.returncode == 0
+        except subprocess.TimeoutExpired:
+            pytest.fail("PreCompact hook timed out")
+
+    def test_pre_compact_handles_minimal_input(self):
+        """PreCompact hook should handle minimal input without custom instructions."""
+        input_data = {
+            "trigger": "user_request",
+            "session_id": "session_456"
+        }
+
+        try:
+            result = subprocess.run(
+                ["python", "-m", "claude_otel.hooks.pre_compact"],
+                input=json.dumps(input_data),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={**os.environ, "OTEL_TRACES_EXPORTER": "none"}
+            )
+            assert result.returncode == 0
+        except subprocess.TimeoutExpired:
+            pytest.fail("PreCompact hook timed out")
+
+    def test_pre_compact_handles_missing_fields(self):
+        """PreCompact hook should handle missing optional fields gracefully."""
+        input_data = {}
+
+        try:
+            result = subprocess.run(
+                ["python", "-m", "claude_otel.hooks.pre_compact"],
+                input=json.dumps(input_data),
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={**os.environ, "OTEL_TRACES_EXPORTER": "none"}
+            )
+            # Should not crash
+            assert result.returncode == 0
+        except subprocess.TimeoutExpired:
+            pytest.fail("PreCompact hook timed out")

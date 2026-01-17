@@ -26,6 +26,7 @@ dev = [
 claude-otel = "claude_otel.wrapper:main"
 claude-otel-pre-tool = "claude_otel.hooks.pre_tool:main"
 claude-otel-post-tool = "claude_otel.hooks.post_tool:main"
+claude-otel-pre-compact = "claude_otel.hooks.pre_compact:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

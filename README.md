@@ -319,6 +319,7 @@ After `pip install -e .`, the following commands are available on your PATH:
 |---------|-------------|
 | `claude-otel-pre-tool` | PreToolUse hook - records start time for duration calculation |
 | `claude-otel-post-tool` | PostToolUse hook - creates OTEL span with full attributes |
+| `claude-otel-pre-compact` | PreCompact hook - tracks context window compaction events |
 
 ### Configuration
 
@@ -338,12 +339,20 @@ Add these hooks to your Claude CLI settings (`~/.claude/settings.json`):
         "matcher": "*",
         "hooks": ["claude-otel-post-tool"]
       }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": ["claude-otel-pre-compact"]
+      }
     ]
   }
 }
 ```
 
 ### Span Attributes
+
+#### Tool Invocation Spans
 
 Each tool invocation span includes:
 
@@ -361,6 +370,16 @@ Each tool invocation span includes:
 | `error` | bool | Whether an error occurred |
 | `error.message` | string | Error message (if error=true) |
 | `tokens.*` | int | Token usage metrics (when available) |
+
+#### Context Compaction Spans
+
+Context window compaction spans (from PreCompact hook) include:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `compaction.trigger` | string | Why compaction occurred (e.g., "max_tokens", "user_request") |
+| `compaction.has_custom_instructions` | bool | Whether custom instructions were provided |
+| `session.id` | string | Claude session ID |
 
 ## License
 
