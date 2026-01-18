@@ -270,7 +270,7 @@ options = ClaudeAgentOptions(
 These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
 
 ### Installation Issues
-- [ ] claude-otel binary using old entry point (wrapper:main instead of cli:app)
+- [bravo] claude-otel binary using old entry point (wrapper:main instead of cli:app)
   - pyproject.toml defines entry point as "claude_otel.cli:app" (new Typer-based CLI)
   - Installed binary at /opt/homebrew/bin/claude-otel uses "claude_otel.wrapper:main" (old CLI)
   - Cause: Package needs to be reinstalled after pyproject.toml was updated
