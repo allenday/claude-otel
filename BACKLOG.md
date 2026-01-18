@@ -288,7 +288,7 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Likely cause: Permission UI hooks not integrated with SDK runner
   - Priority: CRITICAL - completely blocks file editing in interactive mode
 
-- [ ] Fix PreToolUse/PostToolUse hook errors
+- [charlie] Fix PreToolUse/PostToolUse hook errors
   - Hooks are failing for Grep, Read, TodoWrite tools with "hook error" messages
   - Tools still execute successfully (hooks don't block execution)
   - Need to investigate what's causing the hooks to error
