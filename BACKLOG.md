@@ -315,3 +315,28 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Not a bug, but needs documentation for ralph-loop users
   - Consider: Should EnterPlanMode be required before file edits in automated contexts?
   - Priority: LOW - documentation task
+
+### Interactive Mode Issues (2026-01-18)
+
+#### Input Handling
+- [ ] Add multiline input support in interactive mode
+  - Issue: Shift+Enter doesn't allow multiline input
+  - Backslashes in input don't work correctly
+  - Users expect standard terminal multiline input patterns
+  - Location: src/claude_otel/sdk_runner.py or interactive mode input handling
+  - Priority: MEDIUM - usability issue for complex prompts
+
+#### Output Formatting
+- [ ] Fix missing newline in streamed response output
+  - Example: "I'll check how many files...for you.There are 11 files..." (missing \n)
+  - Root cause: Text blocks being concatenated without proper spacing
+  - Location: src/claude_otel/sdk_runner.py response formatting
+  - Related to earlier "missing line breaks in SDK output" bug
+  - Priority: MEDIUM - readability issue
+
+- [ ] Fix tool call display timing in interactive mode
+  - Issue: Tool calls shown before they execute, should appear after initial message
+  - Example: User sees "🔧 Bash..." before seeing "I'll check how many files..."
+  - Requires streaming/partial DOM updates to show invocations as they run
+  - This is a UX enhancement for better feedback during execution
+  - Priority: LOW - nice-to-have for better UX flow
