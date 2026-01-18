@@ -264,3 +264,60 @@ options = ClaudeAgentOptions(
 - [x] Fix failing test: test_sdk_runner_creates_spans
   - Test expects setup_sdk_hooks to be called with (tracer) but it's called with (tracer, None)
   - Update test mock assertion to match actual function signature
+
+## Ralph Loop Integration Issues (2026-01-18)
+
+These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
+
+### Installation Issues
+- [ ] claude-otel binary using old entry point (wrapper:main instead of cli:app)
+  - pyproject.toml defines entry point as "claude_otel.cli:app" (new Typer-based CLI)
+  - Installed binary at /opt/homebrew/bin/claude-otel uses "claude_otel.wrapper:main" (old CLI)
+  - Cause: Package needs to be reinstalled after pyproject.toml was updated
+  - Fix: `pip install -e .` to update the console_scripts entry point
+  - Impact: Interactive mode not available, old CLI doesn't support Typer features
+  - Priority: HIGH - blocks interactive mode functionality
+
+### Critical Bugs
+- [ ] Fix PreToolUse/PostToolUse hook errors
+  - Hooks are failing for Grep, Read, TodoWrite tools with "hook error" messages
+  - Tools still execute successfully (hooks don't block execution)
+  - Need to investigate what's causing the hooks to error
+  - Likely mismatch between expected hook signature/context and what Claude Code provides
+  - Check src/claude_otel/sdk_hooks.py on_pre_tool_use/on_post_tool_use implementations
+  - Priority: HIGH - hooks are core telemetry functionality
+
+- [charlie] Fix KeyError in complete_session() when metrics keys missing
+  - Bug location: src/claude_otel/sdk_hooks.py:534-537
+  - Root cause: Code accesses self.metrics['input_tokens'] and self.metrics['output_tokens'] directly
+  - Failing test: test_complete_session_ends_span_and_flushes (tests/test_hooks.py:998-1002)
+  - Test sets up metrics dict without input_tokens/output_tokens keys
+  - Fix: Use .get() with default values: self.metrics.get('input_tokens', 0)
+  - Priority: MEDIUM - causes test failure, defensive coding needed
+
+### Token Count Issues
+- [ ] Investigate why MessageComplete hook not firing in ralph-loop
+  - Symptom: Token counts show "0 in, 0 out" despite 35 tools used over 544.9s
+  - PreToolUse/PostToolUse hooks ARE working (tool count = 35)
+  - MessageComplete hook NOT working (token counts = 0)
+  - Check if SDK fires MessageComplete in ralph-loop context
+  - Check if message.usage attribute is present
+  - May need fallback token counting mechanism
+  - Priority: MEDIUM - affects telemetry completeness
+
+### Output Formatting Issues
+- [ ] Fix missing line breaks in SDK output
+  - Symptom: Output compressed like "manually:Now let me analyze" without line breaks
+  - Location: src/claude_otel/sdk_runner.py:188 extract_message_text()
+  - Root cause: "".join() concatenates text blocks without separators
+  - Fix: Add newline between text blocks or preserve original spacing
+  - Priority: LOW - cosmetic issue, doesn't affect functionality
+
+### Workflow Issues (Not Code Bugs)
+- [ ] Document file permission workflow for ralph-loop
+  - Issue: Agent attempted file edits but permissions not requested/granted
+  - This is expected behavior - Edit/Write tools should prompt for permissions
+  - In ralph-loop with --max-iterations 1, permission prompts may be bypassed
+  - Not a bug, but needs documentation for ralph-loop users
+  - Consider: Should EnterPlanMode be required before file edits in automated contexts?
+  - Priority: LOW - documentation task
