@@ -545,12 +545,12 @@ class SDKTelemetryHooks:
 
         # Log summary if debug enabled
         if self.config.debug:
-            duration = time.time() - self.metrics["start_time"]
+            duration = time.time() - self.metrics.get("start_time", time.time())
             print(
                 f"🎉 Session completed | "
-                f"{self.metrics['input_tokens']} in, "
-                f"{self.metrics['output_tokens']} out | "
-                f"{self.metrics['tools_used']} tools | "
+                f"{self.metrics.get('input_tokens', 0)} in, "
+                f"{self.metrics.get('output_tokens', 0)} out | "
+                f"{self.metrics.get('tools_used', 0)} tools | "
                 f"{duration:.1f}s"
             )
 

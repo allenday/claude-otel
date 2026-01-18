@@ -287,13 +287,7 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Check src/claude_otel/sdk_hooks.py on_pre_tool_use/on_post_tool_use implementations
   - Priority: HIGH - hooks are core telemetry functionality
 
-- [charlie] Fix KeyError in complete_session() when metrics keys missing
-  - Bug location: src/claude_otel/sdk_hooks.py:534-537
-  - Root cause: Code accesses self.metrics['input_tokens'] and self.metrics['output_tokens'] directly
-  - Failing test: test_complete_session_ends_span_and_flushes (tests/test_hooks.py:998-1002)
-  - Test sets up metrics dict without input_tokens/output_tokens keys
-  - Fix: Use .get() with default values: self.metrics.get('input_tokens', 0)
-  - Priority: MEDIUM - causes test failure, defensive coding needed
+- [x] Fix KeyError in complete_session() when metrics keys missing
 
 ### Token Count Issues
 - [ ] Investigate why MessageComplete hook not firing in ralph-loop
