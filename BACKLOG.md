@@ -306,14 +306,19 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
 - [x] Fix KeyError in complete_session() when metrics keys missing
 
 ### Token Count Issues
-- [charlie] Investigate why MessageComplete hook not firing in ralph-loop
-  - Symptom: Token counts show "0 in, 0 out" despite 35 tools used over 544.9s
-  - PreToolUse/PostToolUse hooks ARE working (tool count = 35)
-  - MessageComplete hook NOT working (token counts = 0)
-  - Check if SDK fires MessageComplete in ralph-loop context
-  - Check if message.usage attribute is present
-  - May need fallback token counting mechanism
-  - Priority: MEDIUM - affects telemetry completeness
+- [x] Investigate why MessageComplete hook not firing in ralph-loop
+  - **ROOT CAUSE FOUND:** MessageComplete is NOT a supported hook in claude-agent-sdk
+  - SDK only supports: UserPromptSubmit, PreToolUse, PostToolUse, PreCompact, Stop, SubagentStop
+  - MessageComplete was silently ignored, never called by SDK
+  - **SOLUTION:** Use Stop hook instead to parse transcript for final token counts
+  - **IMPLEMENTATION:**
+    - Added on_stop() hook to SDKTelemetryHooks (sdk_hooks.py:470)
+    - Parses transcript_path from Stop hook to extract token usage
+    - Updated setup_sdk_hooks() to register Stop instead of MessageComplete
+    - Added comprehensive tests in tests/test_stop_hook.py (7 tests, all passing)
+    - Updated metrics.record_turn() to support count parameter
+  - **IMPACT:** Token counts will now be captured correctly in all SDK contexts
+  - Note: on_message_complete() kept for backward compat with programmatic usage/tests
 
 ### Output Formatting Issues
 - [x] Fix missing line breaks in SDK output

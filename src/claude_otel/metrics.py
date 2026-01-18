@@ -248,11 +248,12 @@ def get_in_flight_count() -> int:
     return _in_flight_gauge_value
 
 
-def record_turn(model: str = "unknown"):
+def record_turn(model: str = "unknown", count: int = 1):
     """Record a conversation turn completion.
 
     Args:
         model: Model used for the turn (default: "unknown").
+        count: Number of turns to record (default: 1).
     """
     _ensure_instruments()
 
@@ -260,7 +261,7 @@ def record_turn(model: str = "unknown"):
         return
 
     attributes = {"model": model}
-    _turn_counter.add(1, attributes)
+    _turn_counter.add(count, attributes)
 
 
 def record_cache_usage(

@@ -398,6 +398,10 @@ class SDKTelemetryHooks:
     ) -> dict[str, Any]:
         """Hook called when assistant message is complete.
 
+        NOTE: This hook is NOT supported by claude-agent-sdk. It remains here
+        for backward compatibility with tests and programmatic usage, but will
+        not be called by the SDK. Use on_stop instead for session-level token counts.
+
         Updates cumulative token counts and turn tracking with gen_ai.* conventions.
 
         Args:
@@ -460,6 +464,116 @@ class SDKTelemetryHooks:
         # Store message
         if hasattr(message, "content"):
             self.messages.append({"role": "assistant", "content": message.content})
+
+        return {}
+
+    async def on_stop(
+        self,
+        input_data: dict[str, Any],
+        tool_use_id: Optional[str],
+        ctx: Any,
+    ) -> dict[str, Any]:
+        """Hook called when the session stops.
+
+        This hook is called by claude-agent-sdk when the session ends. It provides
+        access to the transcript file, which we can parse to extract final token usage.
+
+        Args:
+            input_data: Dict with 'session_id', 'transcript_path', 'cwd', etc.
+            tool_use_id: Not used for this hook
+            ctx: Context object
+
+        Returns:
+            Empty dict (no modifications)
+        """
+        import json
+        from pathlib import Path
+
+        transcript_path = input_data.get("transcript_path")
+        if not transcript_path:
+            if self.config.debug:
+                print("[claude-otel-sdk] Warning: No transcript_path in Stop hook")
+            return {}
+
+        # Parse transcript to extract token usage
+        try:
+            transcript_file = Path(transcript_path)
+            if not transcript_file.exists():
+                if self.config.debug:
+                    print(f"[claude-otel-sdk] Warning: Transcript file not found: {transcript_path}")
+                return {}
+
+            with open(transcript_file, "r") as f:
+                transcript = json.load(f)
+
+            # Extract usage from the last message or accumulated usage
+            # The transcript contains a list of messages with usage data
+            total_input_tokens = 0
+            total_output_tokens = 0
+            total_cache_read = 0
+            total_cache_creation = 0
+            turn_count = 0
+
+            if isinstance(transcript, dict) and "messages" in transcript:
+                messages = transcript["messages"]
+            elif isinstance(transcript, list):
+                messages = transcript
+            else:
+                messages = []
+
+            for msg in messages:
+                if isinstance(msg, dict) and "usage" in msg:
+                    usage = msg["usage"]
+                    if isinstance(usage, dict):
+                        total_input_tokens += usage.get("input_tokens", 0)
+                        total_output_tokens += usage.get("output_tokens", 0)
+                        total_cache_read += usage.get("cache_read_input_tokens", 0)
+                        total_cache_creation += usage.get("cache_creation_input_tokens", 0)
+                        turn_count += 1
+
+            # Update metrics if we found any usage data
+            if turn_count > 0:
+                self.metrics["input_tokens"] = total_input_tokens
+                self.metrics["output_tokens"] = total_output_tokens
+                self.metrics["cache_read_input_tokens"] = total_cache_read
+                self.metrics["cache_creation_input_tokens"] = total_cache_creation
+                self.metrics["turns"] = turn_count
+
+                # Record metrics
+                model = self.metrics.get("model", "unknown")
+                metrics.record_turn(model, count=turn_count)
+                metrics.record_cache_usage(total_cache_read, total_cache_creation, model)
+
+                # Update span with final token counts
+                if self.session_span:
+                    self.session_span.set_attribute("gen_ai.usage.input_tokens", total_input_tokens)
+                    self.session_span.set_attribute("gen_ai.usage.output_tokens", total_output_tokens)
+                    self.session_span.set_attribute("tokens.cache_read", total_cache_read)
+                    self.session_span.set_attribute("tokens.cache_creation", total_cache_creation)
+                    self.session_span.set_attribute("turns", turn_count)
+
+                    # Add event for session completion with final counts
+                    self.session_span.add_event(
+                        "session.tokens_final",
+                        {
+                            "input_tokens": total_input_tokens,
+                            "output_tokens": total_output_tokens,
+                            "cache_read_tokens": total_cache_read,
+                            "cache_creation_tokens": total_cache_creation,
+                            "turns": turn_count,
+                        },
+                    )
+
+                if self.config.debug:
+                    print(
+                        f"[claude-otel-sdk] Extracted from transcript: "
+                        f"{total_input_tokens} in, {total_output_tokens} out, "
+                        f"{turn_count} turns"
+                    )
+
+        except Exception as e:
+            if self.config.debug:
+                print(f"[claude-otel-sdk] Error parsing transcript: {e}")
 
         return {}
 

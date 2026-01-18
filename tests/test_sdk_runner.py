@@ -61,6 +61,7 @@ class TestSetupSDKHooks:
         assert hasattr(hooks, "on_pre_tool_use")
         assert hasattr(hooks, "on_post_tool_use")
         assert hasattr(hooks, "on_message_complete")
+        assert hasattr(hooks, "on_stop")
         assert hasattr(hooks, "on_pre_compact")
 
         # Should return hook config dict
@@ -68,7 +69,9 @@ class TestSetupSDKHooks:
         assert "UserPromptSubmit" in hook_config
         assert "PreToolUse" in hook_config
         assert "PostToolUse" in hook_config
-        assert "MessageComplete" in hook_config
+        # Note: MessageComplete is not a supported hook in claude-agent-sdk
+        # We use Stop hook instead for final token counts
+        assert "Stop" in hook_config
         assert "PreCompact" in hook_config
 
     def test_setup_sdk_hooks_creates_valid_hook_matchers(self, mock_tracer):

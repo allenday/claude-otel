@@ -87,8 +87,11 @@ def setup_sdk_hooks(
         "PostToolUse": [
             HookMatcher(matcher=None, hooks=[hooks.on_post_tool_use])
         ],
-        "MessageComplete": [
-            HookMatcher(matcher=None, hooks=[hooks.on_message_complete])
+        # Note: MessageComplete is not a supported hook in claude-agent-sdk
+        # The SDK supports: UserPromptSubmit, PreToolUse, PostToolUse, PreCompact, Stop, SubagentStop
+        # We use the Stop hook instead to get final session data including token counts
+        "Stop": [
+            HookMatcher(matcher=None, hooks=[hooks.on_stop])
         ],
         "PreCompact": [
             HookMatcher(matcher=None, hooks=[hooks.on_pre_compact])
