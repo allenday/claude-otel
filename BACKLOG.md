@@ -313,12 +313,13 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Priority: MEDIUM - affects telemetry completeness
 
 ### Output Formatting Issues
-- [alpha] Fix missing line breaks in SDK output
+- [x] Fix missing line breaks in SDK output
   - Symptom: Output compressed like "manually:Now let me analyze" without line breaks
   - Location: src/claude_otel/sdk_runner.py:188 extract_message_text()
   - Root cause: "".join() concatenates text blocks without separators
   - Fix: Add newline between text blocks or preserve original spacing
   - Priority: LOW - cosmetic issue, doesn't affect functionality
+  - Resolution: Changed "".join() to "\n".join() in extract_message_text()
 
 ### Workflow Issues (Not Code Bugs)
 - [ ] Document file permission workflow for ralph-loop
@@ -340,12 +341,13 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Priority: MEDIUM - usability issue for complex prompts
 
 #### Output Formatting
-- [ ] Fix missing newline in streamed response output
+- [x] Fix missing newline in streamed response output
   - Example: "I'll check how many files...for you.There are 11 files..." (missing \n)
   - Root cause: Text blocks being concatenated without proper spacing
   - Location: src/claude_otel/sdk_runner.py response formatting
   - Related to earlier "missing line breaks in SDK output" bug
   - Priority: MEDIUM - readability issue
+  - Resolution: Fixed by changing "".join() to "\n".join() in extract_message_text() which handles all response formatting
 
 - [ ] Fix tool call display timing in interactive mode
   - Issue: Tool calls shown before they execute, should appear after initial message

@@ -184,8 +184,8 @@ def extract_message_text(message) -> str:
     content = message.content
 
     if isinstance(content, list):
-        # Extract text from list of blocks
-        return "".join(block.text for block in content if hasattr(block, "text"))
+        # Extract text from list of blocks with proper spacing
+        return "\n".join(block.text for block in content if hasattr(block, "text"))
     elif isinstance(content, str):
         return content
     else:

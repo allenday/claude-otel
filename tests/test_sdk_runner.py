@@ -88,7 +88,7 @@ class TestExtractMessageText:
     """Tests for extract_message_text helper function."""
 
     def test_extract_text_from_list_content(self):
-        """Should extract text from list of content blocks."""
+        """Should extract text from list of content blocks with newlines."""
         mock_block1 = Mock()
         mock_block1.text = "Hello, "
         mock_block2 = Mock()
@@ -98,7 +98,7 @@ class TestExtractMessageText:
         message.content = [mock_block1, mock_block2]
 
         result = extract_message_text(message)
-        assert result == "Hello, world!"
+        assert result == "Hello, \nworld!"
 
     def test_extract_text_from_string_content(self):
         """Should handle string content directly."""
