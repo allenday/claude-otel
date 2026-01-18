@@ -393,6 +393,46 @@ You should see logs in Loki under `service_name="infra/claude-otel"`. Ensure `/r
 
 ## Troubleshooting
 
+### Entry Point / CLI Features Not Working
+
+If `claude-otel --version` doesn't work or shows errors, or if `--use-sdk` and interactive mode features are unavailable, the entry point may need updating.
+
+**Symptoms:**
+- `ImportError` mentioning `wrapper:main` instead of `cli:app`
+- `--version` flag not recognized
+- `--use-sdk` flag not available
+- Interactive mode doesn't start
+
+**Solution:** Reinstall the package to update the console script entry point:
+
+```bash
+# Reinstall in editable mode
+pip install -e .
+
+# Verify the entry point is correct
+head -5 $(which claude-otel)
+# Should show: from claude_otel.cli import app
+
+# Test the CLI
+claude-otel --version
+# Should show: claude-otel version 0.1.0
+```
+
+If you have multiple installations (e.g., in different virtual environments or system-wide), ensure you're using the correct one:
+
+```bash
+# Check which binary is being used
+which claude-otel
+
+# Check if it matches your current Python environment
+pip show claude-otel
+# Location should match your active venv
+
+# If locations don't match, activate the correct environment
+source /path/to/correct/.venv/bin/activate
+pip install -e .
+```
+
 ### "claude command not found"
 
 The wrapper shells out to the `claude` CLI. Ensure it's installed and in your PATH:

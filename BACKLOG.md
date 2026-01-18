@@ -270,13 +270,14 @@ options = ClaudeAgentOptions(
 These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
 
 ### Installation Issues
-- [bravo] claude-otel binary using old entry point (wrapper:main instead of cli:app)
-  - pyproject.toml defines entry point as "claude_otel.cli:app" (new Typer-based CLI)
-  - Installed binary at /opt/homebrew/bin/claude-otel uses "claude_otel.wrapper:main" (old CLI)
-  - Cause: Package needs to be reinstalled after pyproject.toml was updated
-  - Fix: `pip install -e .` to update the console_scripts entry point
-  - Impact: Interactive mode not available, old CLI doesn't support Typer features
-  - Priority: HIGH - blocks interactive mode functionality
+- [x] claude-otel binary using old entry point (wrapper:main instead of cli:app)
+  - Added comprehensive troubleshooting section in README.md covering:
+    - Symptoms: ImportError with wrapper:main, missing flags, interactive mode unavailable
+    - Solution: Reinstall with `pip install -e .` to update entry point
+    - Verification: Check entry point with `head -5 $(which claude-otel)`
+    - Multiple installation handling: Check environment matching with `which` and `pip show`
+  - Current installation verified working with correct entry point (claude_otel.cli:app)
+  - Typer CLI features confirmed functional: --version, --help, --use-sdk, interactive mode
 
 ### Critical Bugs
 - [ ] Fix permission prompts not showing in interactive mode
