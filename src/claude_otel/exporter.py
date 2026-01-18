@@ -54,7 +54,8 @@ DEFAULT_BSP_MAX_QUEUE_SIZE = 2048
 DEFAULT_BSP_MAX_EXPORT_BATCH_SIZE = 512
 DEFAULT_BSP_EXPORT_TIMEOUT_MS = 30000
 DEFAULT_BSP_SCHEDULE_DELAY_MS = 5000
-DEFAULT_EXPORTER_TIMEOUT_MS = 10000
+# Longer default to reduce gRPC deadline issues (can override via OTEL_EXPORTER_OTLP_TIMEOUT)
+DEFAULT_EXPORTER_TIMEOUT_MS = 30000
 
 _tracer_provider: Optional[TracerProvider] = None
 _logger_provider: Optional[LoggerProvider] = None
