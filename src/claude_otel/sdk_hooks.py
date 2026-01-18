@@ -14,6 +14,7 @@ These hooks provide richer telemetry than CLI hooks alone, including:
 from typing import Any, Optional
 import logging
 import time
+import uuid
 
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
@@ -99,7 +100,8 @@ class SDKTelemetryHooks:
         """
         # Extract prompt from input
         prompt = input_data.get("prompt", "")
-        session_id = str(input_data.get("session_id", "")) if input_data.get("session_id", "") is not None else ""
+        raw_session_id = input_data.get("session_id", "")
+        session_id = str(raw_session_id) if raw_session_id else uuid.uuid4().hex
 
         # Extract model from context - handle both dict and object contexts
         model = "unknown"
