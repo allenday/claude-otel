@@ -325,13 +325,14 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Resolution: Changed "".join() to "\n".join() in extract_message_text()
 
 ### Workflow Issues (Not Code Bugs)
-- [bravo] Document file permission workflow for ralph-loop
+- [x] Document file permission workflow for ralph-loop
   - Issue: Agent attempted file edits but permissions not requested/granted
   - This is expected behavior - Edit/Write tools should prompt for permissions
   - In ralph-loop with --max-iterations 1, permission prompts may be bypassed
   - Not a bug, but needs documentation for ralph-loop users
   - Consider: Should EnterPlanMode be required before file edits in automated contexts?
   - Priority: LOW - documentation task
+  - Resolution: Added comprehensive section in README.md covering permission workflows, automated context challenges, and 4 solution options with ralph-loop best practices
 
 ### Interactive Mode Issues (2026-01-18)
 

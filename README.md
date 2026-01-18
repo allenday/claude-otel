@@ -1099,6 +1099,131 @@ Context window compaction spans (from PreCompact hook) include:
 | `compaction.has_custom_instructions` | bool | Whether custom instructions were provided |
 | `session.id` | string | Claude session ID |
 
+## Automated Workflows & Permission Handling
+
+### Ralph Loop Integration
+
+When using `claude-otel` in automated workflows like ralph-loop or other CI/CD contexts, file permission handling requires special consideration.
+
+#### Permission Workflow
+
+In interactive sessions, Claude CLI prompts users for permission before executing file operations (Edit, Write, etc.). However, in automated contexts with limited iterations (e.g., `--max-iterations 1`), this workflow may not complete:
+
+**Expected Behavior:**
+1. Agent attempts to edit/write a file
+2. Claude CLI shows permission prompt UI to user
+3. User grants or denies permission
+4. Agent proceeds or adjusts based on response
+
+**Automated Context Challenges:**
+- Permission prompts may not be visible or interactive in subprocess contexts
+- Limited iterations may not allow for permission roundtrips
+- Agents may wait indefinitely for permission that cannot be granted
+
+#### Solutions for Automated Workflows
+
+**Option 1: Bypass Permissions (Use with Caution)**
+
+For trusted automated contexts where file operations are expected and safe:
+
+```bash
+# Using subprocess mode (CLI wrapper)
+claude-otel --permission-mode=bypassPermissions "task description"
+
+# Using SDK mode
+claude-otel --use-sdk --permission-mode=bypassPermissions "task description"
+
+# Or use the boolean flag
+claude-otel --bypass-permissions "task description"
+```
+
+**Warning:** This bypasses all permission checks. Only use in controlled environments where you trust the operations being performed.
+
+**Option 2: Interactive Permission Prompts (SDK Mode)**
+
+SDK mode (with `--use-sdk`) provides rich permission prompts using the terminal:
+
+```bash
+# SDK mode handles permissions interactively even in automated contexts
+claude-otel --use-sdk "review and fix code"
+
+# Permission prompt appears as:
+# ❓ Allow Edit on file src/example.py? (y/n):
+```
+
+This works in most automated contexts where stdin is available, including ralph-loop with interactive terminal access.
+
+**Option 3: Read-Only Operations**
+
+Structure automated tasks to avoid file modifications:
+
+```bash
+# Instead of "fix the bug" (requires Edit/Write)
+claude-otel "analyze the bug and describe the fix"
+
+# Instead of "implement feature X" (requires Write)
+claude-otel "design feature X and show code examples"
+```
+
+The agent can provide analysis, code snippets, and instructions without requiring file write permissions.
+
+**Option 4: Plan Mode for Complex Tasks**
+
+For non-trivial implementation tasks in automated contexts, use EnterPlanMode to separate planning from execution:
+
+```bash
+# Automated planning phase (read-only, no permissions needed)
+claude-otel "enter plan mode and design solution for feature X"
+
+# Manual execution phase (user reviews plan, grants permissions)
+# User runs approved plan with appropriate permissions
+```
+
+This allows automated context gathering and planning, while requiring manual approval for file modifications.
+
+#### Ralph Loop Best Practices
+
+When using ralph-loop with `claude-otel`:
+
+1. **Short iterations (--max-iterations 1)**: Use `--bypass-permissions` or structure tasks as read-only
+2. **Longer iterations**: Use `--use-sdk` for interactive permission prompts
+3. **Planning tasks**: Keep iterations focused on analysis/design, save implementation for manual execution
+4. **Backlog organization**: Mark tasks requiring file edits separately from analysis tasks
+
+**Example Ralph Loop Configuration:**
+
+```bash
+# For read-only analysis tasks
+claude-otel "analyze codebase and update documentation plan" --max-iterations 1
+
+# For tasks requiring file modifications (with bypass)
+claude-otel --bypass-permissions "implement approved plan from backlog" --max-iterations 1
+
+# For tasks requiring permission prompts (SDK mode, interactive)
+claude-otel --use-sdk "review code and fix issues" --max-iterations 3
+```
+
+#### Debugging Permission Issues
+
+If you encounter permission-related blocking in automated workflows:
+
+1. **Enable debug mode** to see permission requests:
+   ```bash
+   CLAUDE_OTEL_DEBUG=1 claude-otel --use-sdk "your task"
+   ```
+
+2. **Check for permission prompts** in the output - if they appear but aren't being answered, the workflow may need `--bypass-permissions`
+
+3. **Review agent logs** for messages like "Could you grant permission?" - indicates the agent is waiting for user input
+
+4. **Test interactively first** before automating:
+   ```bash
+   # Test manually to see permission flow
+   claude-otel --use-sdk
+   You: implement the feature from backlog
+   # Observe permission prompts and workflow
+   ```
+
 ## License
 
 MIT
