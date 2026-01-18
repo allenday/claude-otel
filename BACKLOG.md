@@ -336,7 +336,7 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
 ### Interactive Mode Issues (2026-01-18)
 
 #### Input Handling
-- [ ] Add multiline input support in interactive mode
+- [alpha] Add multiline input support in interactive mode
   - Issue: Shift+Enter doesn't allow multiline input
   - Backslashes in input don't work correctly
   - Users expect standard terminal multiline input patterns
