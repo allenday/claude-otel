@@ -24,6 +24,7 @@ from claude_otel.sdk_runner import (
     run_agent_interactive_sync,
     extract_message_text,
     permission_callback,
+    get_interactive_prompt,
 )
 from claude_otel.config import OTelConfig
 from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
@@ -855,3 +856,74 @@ class TestSDKRunnerIntegration:
             )
 
             assert exit_code == 0
+
+
+class TestMultilineInput:
+    """Tests for get_interactive_prompt multiline input support."""
+
+    def test_get_interactive_prompt_supports_multiline(self):
+        """Should support multiline input via prompt_toolkit."""
+        from rich.console import Console
+        from prompt_toolkit.application import create_app_session
+        from prompt_toolkit.input import create_pipe_input
+        from prompt_toolkit.output import DummyOutput
+
+        console = Console()
+
+        # Create a pipe input for testing with multiline content
+        # Simulate: "Line 1" + Enter + "Line 2" + Meta+Enter (to submit)
+        with create_pipe_input() as inp:
+            inp.send_text("Line 1\nLine 2\n")
+            # Simulate Meta+Enter which is \x1b\r (escape + enter)
+            inp.send_text("\x1b\r")
+
+            with create_app_session(input=inp, output=DummyOutput()):
+                result = get_interactive_prompt(turn_number=1, console=console)
+
+                # Should return multiline input
+                assert "Line 1" in result
+                assert "Line 2" in result
+
+    def test_get_interactive_prompt_handles_keyboard_interrupt(self):
+        """Should raise KeyboardInterrupt when user presses Ctrl+C."""
+        from rich.console import Console
+        from prompt_toolkit import PromptSession
+
+        console = Console()
+
+        with patch("prompt_toolkit.PromptSession.prompt", side_effect=KeyboardInterrupt()):
+            with pytest.raises(KeyboardInterrupt):
+                get_interactive_prompt(turn_number=1, console=console)
+
+    def test_get_interactive_prompt_handles_eof(self):
+        """Should raise EOFError when encountering EOF."""
+        from rich.console import Console
+
+        console = Console()
+
+        with patch("prompt_toolkit.PromptSession.prompt", side_effect=EOFError()):
+            with pytest.raises(EOFError):
+                get_interactive_prompt(turn_number=1, console=console)
+
+    def test_get_interactive_prompt_shows_turn_number(self):
+        """Should display turn number in prompt."""
+        from rich.console import Console
+        from prompt_toolkit import PromptSession
+
+        console = Console()
+
+        # Mock the PromptSession to capture the message parameter
+        with patch("prompt_toolkit.PromptSession") as mock_session:
+            mock_instance = Mock()
+            mock_instance.prompt = Mock(return_value="test input")
+            mock_session.return_value = mock_instance
+
+            result = get_interactive_prompt(turn_number=5, console=console)
+
+            # Should have created session with turn number in prompt
+            call_kwargs = mock_session.call_args.kwargs
+            assert "message" in call_kwargs
+            # The HTML message should contain "Turn 5"
+            assert "Turn 5" in str(call_kwargs["message"])
+
+            assert result == "test input"

@@ -51,6 +51,7 @@ claude-otel --use-sdk --model=opus
 
 **Interactive mode features:**
 - Multi-turn conversations with shared context
+- Multiline input support: Press Enter for newline, Alt+Enter (Meta+Enter) to submit
 - Session metrics display (tokens, tools used)
 - Rich console output with emoji indicators (🤖, 🔧, ✅, ❌)
 - Exit commands: `exit`, `quit`, `bye`, or press Ctrl+C twice

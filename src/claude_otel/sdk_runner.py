@@ -247,6 +247,8 @@ def extract_message_text(message) -> str:
 def get_interactive_prompt(turn_number: int, console: Console) -> str:
     """Get user input with a styled prompt showing context.
 
+    Supports multiline input with Meta+Enter (Alt+Enter) to submit.
+
     Args:
         turn_number: Current turn number (1-indexed)
         console: Rich console for styled output
@@ -254,13 +256,31 @@ def get_interactive_prompt(turn_number: int, console: Console) -> str:
     Returns:
         User input string
     """
-    from rich.prompt import Prompt
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.formatted_text import HTML
+    from prompt_toolkit.key_binding import KeyBindings
 
-    # Show waiting indicator with turn context
-    prompt_text = f"[bold cyan]Turn {turn_number}[/bold cyan] [dim]›[/dim]"
+    # Create key bindings for multiline support
+    bindings = KeyBindings()
+
+    @bindings.add("escape", "enter")  # Alt/Meta + Enter
+    def _(event):
+        """Submit input on Meta+Enter."""
+        event.current_buffer.validate_and_handle()
+
+    # Create styled prompt text
+    prompt_text = HTML(f'<ansibrightcyan><b>Turn {turn_number}</b></ansibrightcyan> <ansi-dim>›</ansi-dim> ')
+
+    # Create prompt session with multiline support
+    session = PromptSession(
+        message=prompt_text,
+        multiline=True,
+        key_bindings=bindings,
+    )
 
     try:
-        return Prompt.ask(prompt_text, console=console)
+        # Get input (plain Enter for newline, Meta+Enter to submit)
+        return session.prompt()
     except (EOFError, KeyboardInterrupt):
         # Re-raise these for proper handling
         raise

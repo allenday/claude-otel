@@ -337,12 +337,13 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
 ### Interactive Mode Issues (2026-01-18)
 
 #### Input Handling
-- [alpha] Add multiline input support in interactive mode
+- [x] Add multiline input support in interactive mode
   - Issue: Shift+Enter doesn't allow multiline input
   - Backslashes in input don't work correctly
   - Users expect standard terminal multiline input patterns
   - Location: src/claude_otel/sdk_runner.py or interactive mode input handling
   - Priority: MEDIUM - usability issue for complex prompts
+  - Resolution: Implemented using prompt_toolkit with multiline support and Alt+Enter to submit
 
 #### Output Formatting
 - [x] Fix missing newline in streamed response output
