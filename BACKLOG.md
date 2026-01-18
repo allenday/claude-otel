@@ -279,6 +279,15 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Priority: HIGH - blocks interactive mode functionality
 
 ### Critical Bugs
+- [ ] Fix permission prompts not showing in interactive mode
+  - Bug: When Claude tries to edit files, permission request UI never appears to user
+  - Symptom: Claude asks "Could you grant permission?" but user never sees the prompt
+  - Impact: Users cannot grant file edit permissions, blocking all file modifications
+  - Example: Edit tool called → no UI shown → Claude waits indefinitely for permission
+  - Location: src/claude_otel/sdk_runner.py interactive mode or permission handling
+  - Likely cause: Permission UI hooks not integrated with SDK runner
+  - Priority: CRITICAL - completely blocks file editing in interactive mode
+
 - [ ] Fix PreToolUse/PostToolUse hook errors
   - Hooks are failing for Grep, Read, TodoWrite tools with "hook error" messages
   - Tools still execute successfully (hooks don't block execution)
