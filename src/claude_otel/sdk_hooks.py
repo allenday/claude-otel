@@ -520,6 +520,21 @@ class SDKTelemetryHooks:
         # Add completion event
         self.session_span.add_event("session.completed")
 
+        # Emit a summary log for Loki/Grafana charting
+        if self.logger:
+            self.logger.info(
+                "claude sdk session metrics",
+                extra={
+                    "session.duration_ms": session_duration_ms,
+                    "tokens.input": self.metrics.get("input_tokens", 0),
+                    "tokens.output": self.metrics.get("output_tokens", 0),
+                    "tokens.cache_read": self.metrics.get("cache_read_input_tokens", 0),
+                    "tokens.cache_creation": self.metrics.get("cache_creation_input_tokens", 0),
+                    "tools.total": self.metrics.get("tools_used", 0),
+                    "prompts.count": self.metrics.get("turns", 0) or self.metrics.get("prompts_count", 0),
+                },
+            )
+
         # End span
         self.session_span.end()
 
