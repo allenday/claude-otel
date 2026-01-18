@@ -303,7 +303,7 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
 - [x] Fix KeyError in complete_session() when metrics keys missing
 
 ### Token Count Issues
-- [ ] Investigate why MessageComplete hook not firing in ralph-loop
+- [charlie] Investigate why MessageComplete hook not firing in ralph-loop
   - Symptom: Token counts show "0 in, 0 out" despite 35 tools used over 544.9s
   - PreToolUse/PostToolUse hooks ARE working (tool count = 35)
   - MessageComplete hook NOT working (token counts = 0)
