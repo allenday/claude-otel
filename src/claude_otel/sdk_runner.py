@@ -10,15 +10,56 @@ import time
 from typing import Optional
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, HookMatcher
+from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.prompt import Confirm
 
 from claude_otel.config import get_config, OTelConfig
 from claude_otel.sdk_hooks import SDKTelemetryHooks
 from claude_otel import metrics as otel_metrics
+
+
+async def permission_callback(
+    tool_name: str,
+    tool_input: dict,
+    context: ToolPermissionContext,
+) -> PermissionResultAllow | PermissionResultDeny:
+    """Interactive permission callback for tool use.
+
+    Prompts the user in the terminal for permission to use a tool.
+
+    Args:
+        tool_name: Name of the tool to use
+        tool_input: Tool input parameters
+        context: Permission context with signal and suggestions
+
+    Returns:
+        PermissionResultAllow or PermissionResultDeny
+    """
+    console = Console()
+
+    # Show tool info
+    console.print(f"\n[yellow]Permission request for tool:[/yellow] [bold]{tool_name}[/bold]")
+
+    # Show truncated input
+    input_preview = str(tool_input)[:200]
+    if len(str(tool_input)) > 200:
+        input_preview += "..."
+    console.print(f"[dim]Input: {input_preview}[/dim]")
+
+    # Prompt for permission
+    try:
+        if Confirm.ask("[cyan]Allow this tool use?[/cyan]", default=True):
+            return PermissionResultAllow()
+        else:
+            return PermissionResultDeny(message="User denied permission")
+    except (EOFError, KeyboardInterrupt):
+        # If user interrupts, deny by default
+        return PermissionResultDeny(message="Permission prompt interrupted", interrupt=True)
 
 
 def setup_sdk_hooks(
@@ -97,6 +138,14 @@ async def run_agent_with_sdk(
             elif config.debug:
                 print(f"[claude-otel-sdk] {line}")
 
+    # Extract permission_mode from extra_args if present
+    # SDK requires it as a direct parameter, not via extra_args
+    permission_mode = extra_args.get("permission-mode") if extra_args else None
+
+    # Use interactive permission callback if no permission mode specified
+    # This ensures users see permission prompts in SDK mode
+    can_use_tool_callback = permission_callback if permission_mode is None else None
+
     # Create agent options with hooks
     # IMPORTANT: Must explicitly set setting_sources to load user/project/local settings
     # SDK defaults to isolated environment (no settings) when None.
@@ -106,6 +155,8 @@ async def run_agent_with_sdk(
         setting_sources=["user", "project", "local"],
         extra_args=extra_args,
         stderr=log_claude_stderr if config.debug else None,
+        permission_mode=permission_mode,
+        can_use_tool=can_use_tool_callback,
     )
 
     # Use Rich Console for formatted output
@@ -267,12 +318,22 @@ async def run_agent_interactive(
             elif config.debug:
                 print(f"[claude-otel-sdk] {line}")
 
+    # Extract permission_mode from extra_args if present
+    # SDK requires it as a direct parameter, not via extra_args
+    permission_mode = extra_args.get("permission-mode") if extra_args else None
+
+    # Use interactive permission callback if no permission mode specified
+    # This ensures users see permission prompts in SDK mode
+    can_use_tool_callback = permission_callback if permission_mode is None else None
+
     # Create agent options with hooks
     options = ClaudeAgentOptions(
         hooks=hook_config,
         setting_sources=["user", "project", "local"],
         extra_args=extra_args,
         stderr=log_claude_stderr if config.debug else None,
+        permission_mode=permission_mode,
+        can_use_tool=can_use_tool_callback,
     )
 
     # Use Rich Console for formatted output

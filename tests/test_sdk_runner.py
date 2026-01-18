@@ -23,8 +23,10 @@ from claude_otel.sdk_runner import (
     run_agent_interactive,
     run_agent_interactive_sync,
     extract_message_text,
+    permission_callback,
 )
 from claude_otel.config import OTelConfig
+from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
 
 
 @pytest.fixture
@@ -625,6 +627,167 @@ class TestRunAgentInteractiveSync:
 
             assert result == 0
             mock_run.assert_called_once()
+
+
+class TestPermissionCallback:
+    """Tests for permission_callback function."""
+
+    @pytest.mark.asyncio
+    async def test_permission_callback_allows_on_yes(self):
+        """Should return PermissionResultAllow when user confirms."""
+        context = ToolPermissionContext()
+        tool_input = {"file_path": "/test/file.txt", "content": "test"}
+
+        with patch("rich.prompt.Confirm.ask", return_value=True):
+            result = await permission_callback("Edit", tool_input, context)
+
+        assert isinstance(result, PermissionResultAllow)
+
+    @pytest.mark.asyncio
+    async def test_permission_callback_denies_on_no(self):
+        """Should return PermissionResultDeny when user declines."""
+        context = ToolPermissionContext()
+        tool_input = {"command": "rm -rf /"}
+
+        with patch("rich.prompt.Confirm.ask", return_value=False):
+            result = await permission_callback("Bash", tool_input, context)
+
+        assert isinstance(result, PermissionResultDeny)
+        assert result.message == "User denied permission"
+
+    @pytest.mark.asyncio
+    async def test_permission_callback_denies_on_keyboard_interrupt(self):
+        """Should return PermissionResultDeny on KeyboardInterrupt."""
+        context = ToolPermissionContext()
+        tool_input = {"file_path": "/test/file.txt"}
+
+        with patch("rich.prompt.Confirm.ask", side_effect=KeyboardInterrupt()):
+            result = await permission_callback("Edit", tool_input, context)
+
+        assert isinstance(result, PermissionResultDeny)
+        assert "interrupted" in result.message.lower()
+        assert result.interrupt is True
+
+    @pytest.mark.asyncio
+    async def test_permission_callback_denies_on_eof(self):
+        """Should return PermissionResultDeny on EOFError."""
+        context = ToolPermissionContext()
+        tool_input = {"file_path": "/test/file.txt"}
+
+        with patch("rich.prompt.Confirm.ask", side_effect=EOFError()):
+            result = await permission_callback("Edit", tool_input, context)
+
+        assert isinstance(result, PermissionResultDeny)
+        assert "interrupted" in result.message.lower()
+        assert result.interrupt is True
+
+    @pytest.mark.asyncio
+    async def test_permission_callback_truncates_long_input(self):
+        """Should truncate long input preview."""
+        context = ToolPermissionContext()
+        # Create input longer than 200 chars
+        long_content = "x" * 300
+        tool_input = {"content": long_content}
+
+        with patch("rich.prompt.Confirm.ask", return_value=True):
+            with patch("rich.console.Console.print") as mock_print:
+                result = await permission_callback("Write", tool_input, context)
+
+                # Check that truncation occurred in the print call
+                print_calls = [str(call) for call in mock_print.call_args_list]
+                # Should have "..." in the truncated preview
+                assert any("..." in str(call) for call in print_calls)
+
+        assert isinstance(result, PermissionResultAllow)
+
+
+class TestPermissionMode:
+    """Tests for permission_mode handling in SDK runner."""
+
+    @pytest.mark.asyncio
+    async def test_run_agent_extracts_permission_mode_from_extra_args(self, mock_tracer, test_config):
+        """Should extract permission-mode from extra_args and pass to ClaudeAgentOptions."""
+        mock_message = Mock()
+        mock_message.content = "Response"
+
+        async def mock_receive():
+            yield mock_message
+
+        mock_client = AsyncMock()
+        mock_client.query = AsyncMock()
+        mock_client.receive_response = mock_receive
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+
+        with patch("claude_otel.sdk_runner.ClaudeSDKClient", return_value=mock_client):
+            with patch("claude_otel.sdk_runner.ClaudeAgentOptions") as mock_options:
+                await run_agent_with_sdk(
+                    prompt="Test",
+                    extra_args={"permission-mode": "bypassPermissions"},
+                    config=test_config,
+                    tracer=mock_tracer,
+                )
+
+                # Check that permission_mode was extracted and passed
+                call_kwargs = mock_options.call_args.kwargs
+                assert call_kwargs["permission_mode"] == "bypassPermissions"
+
+    @pytest.mark.asyncio
+    async def test_run_agent_uses_callback_when_no_permission_mode(self, mock_tracer, test_config):
+        """Should use permission_callback when permission_mode is None."""
+        mock_message = Mock()
+        mock_message.content = "Response"
+
+        async def mock_receive():
+            yield mock_message
+
+        mock_client = AsyncMock()
+        mock_client.query = AsyncMock()
+        mock_client.receive_response = mock_receive
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+
+        with patch("claude_otel.sdk_runner.ClaudeSDKClient", return_value=mock_client):
+            with patch("claude_otel.sdk_runner.ClaudeAgentOptions") as mock_options:
+                await run_agent_with_sdk(
+                    prompt="Test",
+                    extra_args={},  # No permission-mode
+                    config=test_config,
+                    tracer=mock_tracer,
+                )
+
+                # Check that can_use_tool callback was set
+                call_kwargs = mock_options.call_args.kwargs
+                assert call_kwargs["can_use_tool"] is not None
+                assert callable(call_kwargs["can_use_tool"])
+
+    @pytest.mark.asyncio
+    async def test_run_agent_no_callback_when_permission_mode_set(self, mock_tracer, test_config):
+        """Should not use callback when permission_mode is explicitly set."""
+        mock_message = Mock()
+        mock_message.content = "Response"
+
+        async def mock_receive():
+            yield mock_message
+
+        mock_client = AsyncMock()
+        mock_client.query = AsyncMock()
+        mock_client.receive_response = mock_receive
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+
+        with patch("claude_otel.sdk_runner.ClaudeSDKClient", return_value=mock_client):
+            with patch("claude_otel.sdk_runner.ClaudeAgentOptions") as mock_options:
+                await run_agent_with_sdk(
+                    prompt="Test",
+                    extra_args={"permission-mode": "acceptEdits"},
+                    config=test_config,
+                    tracer=mock_tracer,
+                )
+
+                # Check that can_use_tool callback was NOT set
+                call_kwargs = mock_options.call_args.kwargs
+                assert call_kwargs["can_use_tool"] is None
 
 
 class TestSDKRunnerIntegration:

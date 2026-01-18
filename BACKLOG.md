@@ -280,13 +280,16 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Typer CLI features confirmed functional: --version, --help, --use-sdk, interactive mode
 
 ### Critical Bugs
-- [bravo] Fix permission prompts not showing in interactive mode
+- [x] Fix permission prompts not showing in interactive mode
   - Bug: When Claude tries to edit files, permission request UI never appears to user
   - Symptom: Claude asks "Could you grant permission?" but user never sees the prompt
   - Impact: Users cannot grant file edit permissions, blocking all file modifications
   - Example: Edit tool called → no UI shown → Claude waits indefinitely for permission
   - Location: src/claude_otel/sdk_runner.py interactive mode or permission handling
-  - Likely cause: Permission UI hooks not integrated with SDK runner
+  - Root cause: SDK runs Claude CLI as subprocess without terminal stdin access
+  - Solution: Implemented custom `can_use_tool` callback using Rich Confirm prompts
+  - Fix: Extract permission_mode from extra_args + use permission_callback when not set
+  - Tests: Added comprehensive permission callback tests in test_sdk_runner.py
   - Priority: CRITICAL - completely blocks file editing in interactive mode
 
 - [x] Fix PreToolUse/PostToolUse hook errors [charlie - could not reproduce]
