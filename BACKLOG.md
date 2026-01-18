@@ -309,7 +309,7 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Priority: MEDIUM - affects telemetry completeness
 
 ### Output Formatting Issues
-- [ ] Fix missing line breaks in SDK output
+- [alpha] Fix missing line breaks in SDK output
   - Symptom: Output compressed like "manually:Now let me analyze" without line breaks
   - Location: src/claude_otel/sdk_runner.py:188 extract_message_text()
   - Root cause: "".join() concatenates text blocks without separators
