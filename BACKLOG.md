@@ -280,7 +280,7 @@ These bugs were discovered during ralph-loop testing with `--max-iterations 1`.
   - Typer CLI features confirmed functional: --version, --help, --use-sdk, interactive mode
 
 ### Critical Bugs
-- [ ] Fix permission prompts not showing in interactive mode
+- [bravo] Fix permission prompts not showing in interactive mode
   - Bug: When Claude tries to edit files, permission request UI never appears to user
   - Symptom: Claude asks "Could you grant permission?" but user never sees the prompt
   - Impact: Users cannot grant file edit permissions, blocking all file modifications
